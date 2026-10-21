@@ -1,86 +1,836 @@
 {
-  "invert-binary-tree": [
-    {"args": [[1]], "want": [1]},
-    {"args": [[1, 2, null, 3]], "want": [1, null, 2, null, 3]},
-    {"args": [[1, null, 2, null, 3]], "want": [1, 2, null, 3]}
-  ],
-  "maximum-depth-of-binary-tree": [
-    {"args": [[]], "want": 0},
-    {"args": [[1]], "want": 1},
-    {"args": [[1, 2, 3, 4, 5, 6, 7]], "want": 3},
-    {"args": [[1, 2, null, 3]], "want": 3}
-  ],
-  "diameter-of-binary-tree": [
-    {"args": [[1]], "want": 0},
-    {"args": [[1, 2, null, 3]], "want": 2},
-    {"args": [[1, 2, 3, 4, 5, null, null, 6]], "want": 4}
-  ],
-  "balanced-binary-tree": [
-    {"args": [[1]], "want": true},
-    {"args": [[1, 2, null]], "want": true},
-    {"args": [[1, 2, null, 3]], "want": false},
-    {"args": [[1, 2, 3]], "want": true}
-  ],
-  "same-tree": [
-    {"args": [[], []], "want": true},
-    {"args": [[], [1]], "want": false},
-    {"args": [[1, 2, null, 3], [1, 2, null, 3]], "want": true},
-    {"args": [[1, 2, null, 3], [1, 2, null, 4]], "want": false}
-  ],
-  "subtree-of-another-tree": [
-    {"args": [[1], [1]], "want": true},
-    {"args": [[1], [1, 2]], "want": false},
-    {"args": [[1, 2, 3], [1, 2, 3]], "want": true},
-    {"args": [[1, null, 2, null, 3], [2, null, 3]], "want": true}
-  ],
-  "lowest-common-ancestor-of-a-binary-search-tree": [
-    {"args": [[6, 2, 8, 0, 4, 7, 9, null, null, 3, 5], 3, 5], "want": 4},
-    {"args": [[6, 2, 8, 0, 4, 7, 9, null, null, 3, 5], 0, 4], "want": 2},
-    {"args": [[6, 2, 8, 0, 4, 7, 9, null, null, 3, 5], 6, 9], "want": 6},
-    {"args": [[6, 2, 8, 0, 4, 7, 9, null, null, 3, 5], 7, 9], "want": 8}
-  ],
-  "binary-tree-level-order-traversal": [
-    {"args": [[1, 2, 3, 4, 5, 6, 7]], "want": [[1], [2, 3], [4, 5, 6, 7]]},
-    {"args": [[1, 2, null, 3]], "want": [[1], [2], [3]]},
-    {"args": [[1, null, 2, null, 3]], "want": [[1], [2], [3]]}
-  ],
-  "binary-tree-right-side-view": [
-    {"args": [[1, 2, null, 3]], "want": [1, 2, 3]},
-    {"args": [[1, 2, 3, 4]], "want": [1, 3, 4]},
-    {"args": [[1, 2, null, 3, null, 4]], "want": [1, 2, 3, 4]}
-  ],
-  "count-good-nodes-in-binary-tree": [
-    {"args": [[5, 4, null, 3]], "want": 1},
-    {"args": [[1, 2, null, 3]], "want": 3},
-    {"args": [[2, 2, 2]], "want": 3},
-    {"args": [[3, 1, 4, null, null, 1, 5, 0]], "want": 3}
-  ],
-  "validate-binary-search-tree": [
-    {"args": [[1]], "want": true},
-    {"args": [[2, 2, null]], "want": false},
-    {"args": [[5, 4, 6, null, null, 3, 7]], "want": false},
-    {"args": [[3, 1, 5, 0, 2, 4, 6]], "want": true}
-  ],
-  "kth-smallest-element-in-a-bst": [
-    {"args": [[3, 1, 4, null, 2], 4], "want": 4},
-    {"args": [[1, null, 2, null, 3], 3], "want": 3},
-    {"args": [[5, 4, null, 3, null, 2, null, 1], 2], "want": 2},
-    {"args": [[1], 1], "want": 1}
-  ],
-  "construct-binary-tree-from-preorder-and-inorder-traversal": [
-    {"args": [[1, 2, 3], [3, 2, 1]], "want": [1, 2, null, 3]},
-    {"args": [[1, 2, 3], [1, 2, 3]], "want": [1, null, 2, null, 3]},
-    {"args": [[1, 2, 3], [2, 1, 3]], "want": [1, 2, 3]}
-  ],
-  "binary-tree-maximum-path-sum": [
-    {"args": [[-3]], "want": -3},
-    {"args": [[-1, -2, null, -3]], "want": -1},
-    {"args": [[-5, 10, 20, null, null, 5, 6]], "want": 31},
-    {"args": [[2, -1, -2]], "want": 2}
-  ],
-  "serialize-and-deserialize-binary-tree": [
-    {"ops": ["Codec", "serialize", "deserialize"], "args": [[], [[1, 2, null, 3]], ["@prev"]], "want": [null, null, [1, 2, null, 3]]},
-    {"ops": ["Codec", "serialize", "deserialize"], "args": [[], [[-1, null, -2]], ["@prev"]], "want": [null, null, [-1, null, -2]]},
-    {"ops": ["Codec", "serialize", "deserialize"], "args": [[], [[1, 2, 3, 4, 5, 6, 7]], ["@prev"]], "want": [null, null, [1, 2, 3, 4, 5, 6, 7]]}
-  ]
+ "invert-binary-tree": [
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": [
+    1
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": [
+    1,
+    null,
+    2,
+    null,
+    3
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     null,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": [
+    1,
+    2,
+    null,
+    3
+   ]
+  }
+ ],
+ "maximum-depth-of-binary-tree": [
+  {
+   "args": [
+    []
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7
+    ]
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": 3
+  }
+ ],
+ "diameter-of-binary-tree": [
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3,
+     4,
+     5,
+     null,
+     null,
+     6
+    ]
+   ],
+   "want": 4
+  }
+ ],
+ "balanced-binary-tree": [
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "want": true
+  }
+ ],
+ "same-tree": [
+  {
+   "args": [
+    [],
+    []
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [],
+    [
+     1
+    ]
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ],
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ],
+    [
+     1,
+     2,
+     null,
+     4
+    ]
+   ],
+   "want": false
+  }
+ ],
+ "subtree-of-another-tree": [
+  {
+   "args": [
+    [
+     1
+    ],
+    [
+     1
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     1
+    ],
+    [
+     1,
+     2
+    ]
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3
+    ],
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     1,
+     null,
+     2,
+     null,
+     3
+    ],
+    [
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": true
+  }
+ ],
+ "lowest-common-ancestor-of-a-binary-search-tree": [
+  {
+   "args": [
+    [
+     6,
+     2,
+     8,
+     0,
+     4,
+     7,
+     9,
+     null,
+     null,
+     3,
+     5
+    ],
+    3,
+    5
+   ],
+   "want": 4
+  },
+  {
+   "args": [
+    [
+     6,
+     2,
+     8,
+     0,
+     4,
+     7,
+     9,
+     null,
+     null,
+     3,
+     5
+    ],
+    0,
+    4
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    [
+     6,
+     2,
+     8,
+     0,
+     4,
+     7,
+     9,
+     null,
+     null,
+     3,
+     5
+    ],
+    6,
+    9
+   ],
+   "want": 6
+  },
+  {
+   "args": [
+    [
+     6,
+     2,
+     8,
+     0,
+     4,
+     7,
+     9,
+     null,
+     null,
+     3,
+     5
+    ],
+    7,
+    9
+   ],
+   "want": 8
+  }
+ ],
+ "binary-tree-level-order-traversal": [
+  {
+   "args": [
+    [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7
+    ]
+   ],
+   "want": [
+    [
+     1
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     4,
+     5,
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": [
+    [
+     1
+    ],
+    [
+     2
+    ],
+    [
+     3
+    ]
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     null,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": [
+    [
+     1
+    ],
+    [
+     2
+    ],
+    [
+     3
+    ]
+   ]
+  }
+ ],
+ "binary-tree-right-side-view": [
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3,
+     4
+    ]
+   ],
+   "want": [
+    1,
+    3,
+    4
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3,
+     null,
+     4
+    ]
+   ],
+   "want": [
+    1,
+    2,
+    3,
+    4
+   ]
+  }
+ ],
+ "count-good-nodes-in-binary-tree": [
+  {
+   "args": [
+    [
+     5,
+     4,
+     null,
+     3
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    [
+     2,
+     2,
+     2
+    ]
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    [
+     3,
+     1,
+     4,
+     null,
+     null,
+     1,
+     5,
+     0
+    ]
+   ],
+   "want": 3
+  }
+ ],
+ "validate-binary-search-tree": [
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    [
+     2,
+     2,
+     null
+    ]
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    [
+     5,
+     4,
+     6,
+     null,
+     null,
+     3,
+     7
+    ]
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    [
+     3,
+     1,
+     5,
+     0,
+     2,
+     4,
+     6
+    ]
+   ],
+   "want": true
+  }
+ ],
+ "kth-smallest-element-in-a-bst": [
+  {
+   "args": [
+    [
+     3,
+     1,
+     4,
+     null,
+     2
+    ],
+    4
+   ],
+   "want": 4
+  },
+  {
+   "args": [
+    [
+     1,
+     null,
+     2,
+     null,
+     3
+    ],
+    3
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    [
+     5,
+     4,
+     null,
+     3,
+     null,
+     2,
+     null,
+     1
+    ],
+    2
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    [
+     1
+    ],
+    1
+   ],
+   "want": 1
+  }
+ ],
+ "construct-binary-tree-from-preorder-and-inorder-traversal": [
+  {
+   "args": [
+    [
+     1,
+     2,
+     3
+    ],
+    [
+     3,
+     2,
+     1
+    ]
+   ],
+   "want": [
+    1,
+    2,
+    null,
+    3
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3
+    ],
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "want": [
+    1,
+    null,
+    2,
+    null,
+    3
+   ]
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     3
+    ],
+    [
+     2,
+     1,
+     3
+    ]
+   ],
+   "want": [
+    1,
+    2,
+    3
+   ]
+  }
+ ],
+ "binary-tree-maximum-path-sum": [
+  {
+   "args": [
+    [
+     -3
+    ]
+   ],
+   "want": -3
+  },
+  {
+   "args": [
+    [
+     -1,
+     -2,
+     null,
+     -3
+    ]
+   ],
+   "want": -1
+  },
+  {
+   "args": [
+    [
+     -5,
+     10,
+     20,
+     null,
+     null,
+     5,
+     6
+    ]
+   ],
+   "want": 31
+  },
+  {
+   "args": [
+    [
+     2,
+     -1,
+     -2
+    ]
+   ],
+   "want": 2
+  }
+ ],
+ "serialize-and-deserialize-binary-tree": [
+  {
+   "ops": [
+    "Codec",
+    "serialize",
+    "deserialize"
+   ],
+   "args": [
+    [],
+    [
+     [
+      1,
+      2,
+      null,
+      3
+     ]
+    ],
+    [
+     "@prev"
+    ]
+   ],
+   "want": [
+    null,
+    null,
+    [
+     1,
+     2,
+     null,
+     3
+    ]
+   ]
+  },
+  {
+   "ops": [
+    "Codec",
+    "serialize",
+    "deserialize"
+   ],
+   "args": [
+    [],
+    [
+     [
+      -1,
+      null,
+      -2
+     ]
+    ],
+    [
+     "@prev"
+    ]
+   ],
+   "want": [
+    null,
+    null,
+    [
+     -1,
+     null,
+     -2
+    ]
+   ]
+  },
+  {
+   "ops": [
+    "Codec",
+    "serialize",
+    "deserialize"
+   ],
+   "args": [
+    [],
+    [
+     [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ]
+    ],
+    [
+     "@prev"
+    ]
+   ],
+   "want": [
+    null,
+    null,
+    [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7
+    ]
+   ]
+  }
+ ]
 }

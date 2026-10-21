@@ -1,59 +1,337 @@
 {
-  "unique-paths": [
-    {"args": [1, 1], "want": 1},
-    {"args": [2, 2], "want": 2},
-    {"args": [1, 10], "want": 1}
-  ],
-  "longest-common-subsequence": [
-    {"args": ["a", "a"], "want": 1},
-    {"args": ["aaa", "aa"], "want": 2},
-    {"args": ["ab", "ba"], "want": 1}
-  ],
-  "best-time-to-buy-and-sell-stock-with-cooldown": [
-    {"args": [[2, 1]], "want": 0},
-    {"args": [[1, 2, 4]], "want": 3},
-    {"args": [[1, 3, 2, 4]], "want": 3}
-  ],
-  "coin-change-ii": [
-    {"args": [0, [1]], "want": 1},
-    {"args": [4, [1, 2, 3]], "want": 4},
-    {"args": [7, [2, 3]], "want": 1}
-  ],
-  "target-sum": [
-    {"args": [[0], 0], "want": 2},
-    {"args": [[2, 1], 1], "want": 1},
-    {"args": [[3, 2], 6], "want": 0}
-  ],
-  "interleaving-string": [
-    {"args": ["a", "", "a"], "want": true},
-    {"args": ["ab", "cd", "adbc"], "want": false},
-    {"args": ["a", "b", "abc"], "want": false}
-  ],
-  "longest-increasing-path-in-a-matrix": [
-    {"args": [[[7, 7]]], "want": 1},
-    {"args": [[[1, 2], [2, 1]]], "want": 2},
-    {"args": [[[5, 4, 3], [4, 3, 2], [3, 2, 1]]], "want": 5},
-    {"args": [[[1, 3, 2, 4]]], "want": 2}
-  ],
-  "distinct-subsequences": [
-    {"args": ["a", "a"], "want": 1},
-    {"args": ["aaa", "aa"], "want": 3},
-    {"args": ["bab", "b"], "want": 2}
-  ],
-  "edit-distance": [
-    {"args": ["", "abc"], "want": 3},
-    {"args": ["abc", ""], "want": 3},
-    {"args": ["abc", "abc"], "want": 0}
-  ],
-  "burst-balloons": [
-    {"args": [[1]], "want": 1},
-    {"args": [[0, 5]], "want": 5},
-    {"args": [[3, 1, 5]], "want": 35}
-  ],
-  "regular-expression-matching": [
-    {"args": ["abc", "a.c"], "want": true},
-    {"args": ["aaa", "a*a"], "want": true},
-    {"args": ["ab", ".*c"], "want": false},
-    {"args": ["mississippi", "mis*is*p*."], "want": false}
-  ]
+ "unique-paths": [
+  {
+   "args": [
+    1,
+    1
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    2,
+    2
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    1,
+    10
+   ],
+   "want": 1
+  }
+ ],
+ "longest-common-subsequence": [
+  {
+   "args": [
+    "a",
+    "a"
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    "aaa",
+    "aa"
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    "ab",
+    "ba"
+   ],
+   "want": 1
+  }
+ ],
+ "best-time-to-buy-and-sell-stock-with-cooldown": [
+  {
+   "args": [
+    [
+     2,
+     1
+    ]
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    [
+     1,
+     2,
+     4
+    ]
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    [
+     1,
+     3,
+     2,
+     4
+    ]
+   ],
+   "want": 3
+  }
+ ],
+ "coin-change-ii": [
+  {
+   "args": [
+    0,
+    [
+     1
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    4,
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "want": 4
+  },
+  {
+   "args": [
+    7,
+    [
+     2,
+     3
+    ]
+   ],
+   "want": 1
+  }
+ ],
+ "target-sum": [
+  {
+   "args": [
+    [
+     0
+    ],
+    0
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    [
+     2,
+     1
+    ],
+    1
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     3,
+     2
+    ],
+    6
+   ],
+   "want": 0
+  }
+ ],
+ "interleaving-string": [
+  {
+   "args": [
+    "a",
+    "",
+    "a"
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    "ab",
+    "cd",
+    "adbc"
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    "a",
+    "b",
+    "abc"
+   ],
+   "want": false
+  }
+ ],
+ "longest-increasing-path-in-a-matrix": [
+  {
+   "args": [
+    [
+     [
+      7,
+      7
+     ]
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      1
+     ]
+    ]
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    [
+     [
+      5,
+      4,
+      3
+     ],
+     [
+      4,
+      3,
+      2
+     ],
+     [
+      3,
+      2,
+      1
+     ]
+    ]
+   ],
+   "want": 5
+  },
+  {
+   "args": [
+    [
+     [
+      1,
+      3,
+      2,
+      4
+     ]
+    ]
+   ],
+   "want": 2
+  }
+ ],
+ "distinct-subsequences": [
+  {
+   "args": [
+    "a",
+    "a"
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    "aaa",
+    "aa"
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    "bab",
+    "b"
+   ],
+   "want": 2
+  }
+ ],
+ "edit-distance": [
+  {
+   "args": [
+    "",
+    "abc"
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    "abc",
+    ""
+   ],
+   "want": 3
+  },
+  {
+   "args": [
+    "abc",
+    "abc"
+   ],
+   "want": 0
+  }
+ ],
+ "burst-balloons": [
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     0,
+     5
+    ]
+   ],
+   "want": 5
+  },
+  {
+   "args": [
+    [
+     3,
+     1,
+     5
+    ]
+   ],
+   "want": 35
+  }
+ ],
+ "regular-expression-matching": [
+  {
+   "args": [
+    "abc",
+    "a.c"
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    "aaa",
+    "a*a"
+   ],
+   "want": true
+  },
+  {
+   "args": [
+    "ab",
+    ".*c"
+   ],
+   "want": false
+  },
+  {
+   "args": [
+    "mississippi",
+    "mis*is*p*."
+   ],
+   "want": false
+  }
+ ]
 }

@@ -858,8 +858,11 @@ def test_extras_prints_hand_written_cases(env, capsys):
     run(["extras", "binary-search"], capsys)
     o = out(capsys)
     assert "Edge cases for binary-search" in o
-    assert "case 1:" in o and "args=[[], 5]" in o and "want=-1" in o
-    assert "case 4:" in o
+    assert "case 1:" in o
+    assert "args=" in o and "want=" in o
+    # Should have many generated cases (at least 20)
+    case_count = o.count("case ")
+    assert case_count >= 20, f"expected at least 20 cases, got {case_count}"
 
 
 def test_reference_unknown_slug_exits_with_hint(env, capsys):

@@ -1,39 +1,190 @@
 {
-  "single-number": [
-    {"args": [[-3, -3, -7]], "want": -7},
-    {"args": [[0, 0, 5]], "want": 5},
-    {"args": [[-1]], "want": -1}
-  ],
-  "number-of-1-bits": [
-    {"args": [0], "want": 0},
-    {"args": [3], "want": 2},
-    {"args": [1023], "want": 10}
-  ],
-  "counting-bits": [
-    {"args": [0], "want": [0]},
-    {"args": [1], "want": [0, 1]},
-    {"args": [8], "want": [0, 1, 1, 2, 1, 2, 2, 3, 1]}
-  ],
-  "reverse-bits": [
-    {"args": [0], "want": 0},
-    {"args": [2], "want": 1073741824},
-    {"args": [12], "want": 805306368}
-  ],
-  "missing-number": [
-    {"args": [[0]], "want": 1},
-    {"args": [[1]], "want": 0},
-    {"args": [[2, 0]], "want": 1}
-  ],
-  "sum-of-two-integers": [
-    {"args": [0, 0], "want": 0},
-    {"args": [-5, -7], "want": -12},
-    {"args": [-1, 1], "want": 0},
-    {"args": [3, -1], "want": 2}
-  ],
-  "reverse-integer": [
-    {"args": [0], "want": 0},
-    {"args": [1534236469], "want": 0},
-    {"args": [-2147483648], "want": 0},
-    {"args": [7], "want": 7}
-  ]
+ "single-number": [
+  {
+   "args": [
+    [
+     -3,
+     -3,
+     -7
+    ]
+   ],
+   "want": -7
+  },
+  {
+   "args": [
+    [
+     0,
+     0,
+     5
+    ]
+   ],
+   "want": 5
+  },
+  {
+   "args": [
+    [
+     -1
+    ]
+   ],
+   "want": -1
+  }
+ ],
+ "number-of-1-bits": [
+  {
+   "args": [
+    0
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    3
+   ],
+   "want": 2
+  },
+  {
+   "args": [
+    1023
+   ],
+   "want": 10
+  }
+ ],
+ "counting-bits": [
+  {
+   "args": [
+    0
+   ],
+   "want": [
+    0
+   ]
+  },
+  {
+   "args": [
+    1
+   ],
+   "want": [
+    0,
+    1
+   ]
+  },
+  {
+   "args": [
+    8
+   ],
+   "want": [
+    0,
+    1,
+    1,
+    2,
+    1,
+    2,
+    2,
+    3,
+    1
+   ]
+  }
+ ],
+ "reverse-bits": [
+  {
+   "args": [
+    0
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    2
+   ],
+   "want": 1073741824
+  },
+  {
+   "args": [
+    12
+   ],
+   "want": 805306368
+  }
+ ],
+ "missing-number": [
+  {
+   "args": [
+    [
+     0
+    ]
+   ],
+   "want": 1
+  },
+  {
+   "args": [
+    [
+     1
+    ]
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    [
+     2,
+     0
+    ]
+   ],
+   "want": 1
+  }
+ ],
+ "sum-of-two-integers": [
+  {
+   "args": [
+    0,
+    0
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    -5,
+    -7
+   ],
+   "want": -12
+  },
+  {
+   "args": [
+    -1,
+    1
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    3,
+    -1
+   ],
+   "want": 2
+  }
+ ],
+ "reverse-integer": [
+  {
+   "args": [
+    0
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    1534236469
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    -2147483648
+   ],
+   "want": 0
+  },
+  {
+   "args": [
+    7
+   ],
+   "want": 7
+  }
+ ]
 }

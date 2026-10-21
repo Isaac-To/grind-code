@@ -1,40 +1,451 @@
 {
-  "implement-trie-prefix-tree": [
-    {
-      "ops": ["Trie", "insert", "startsWith", "search", "insert", "search", "search", "startsWith", "insert", "search", "startsWith"],
-      "args": [[], ["a"], ["a"], ["a"], ["ab"], ["ab"], ["a"], ["abc"], ["a"], ["a"], ["ab"]],
-      "want": [null, null, true, true, null, true, true, false, null, true, true]
-    },
-    {
-      "ops": ["Trie", "search", "startsWith", "insert", "search", "startsWith", "startsWith"],
-      "args": [[], ["z"], ["z"], ["zzzz"], ["zzzz"], ["z"], ["zzz"]],
-      "want": [null, false, false, null, true, true, true]
-    }
-  ],
-  "design-add-and-search-words-data-structure": [
-    {
-      "ops": ["WordDictionary", "addWord", "search", "search", "search", "addWord", "search", "search", "search", "search"],
-      "args": [[], ["a"], ["a"], ["b"], ["."], ["abc"], ["..c"], ["a.c"], ["..."], ["...."]],
-      "want": [null, null, true, false, true, null, true, true, true, false]
-    },
-    {
-      "ops": ["WordDictionary", "search", "search", "addWord", "search", "search", "addWord", "search"],
-      "args": [[], ["."], ["..."], ["x"], ["x"], ["."], ["xyz"], [".yz"]],
-      "want": [null, false, false, null, true, true, null, true]
-    }
-  ],
-  "word-search-ii": [
-    {
-      "args": [[["a"]], ["a"]],
-      "want": ["a"]
-    },
-    {
-      "args": [[["a", "a"], ["a", "a"]], ["aaa", "aaaa", "aa"]],
-      "want": ["aa", "aaa", "aaaa"]
-    },
-    {
-      "args": [[["a", "b", "c"]], ["cba", "abc", "abd"]],
-      "want": ["abc", "cba"]
-    }
-  ]
+ "implement-trie-prefix-tree": [
+  {
+   "ops": [
+    "Trie",
+    "insert",
+    "startsWith",
+    "search",
+    "insert",
+    "search",
+    "search",
+    "startsWith",
+    "insert",
+    "search",
+    "startsWith"
+   ],
+   "args": [
+    [],
+    [
+     "a"
+    ],
+    [
+     "a"
+    ],
+    [
+     "a"
+    ],
+    [
+     "ab"
+    ],
+    [
+     "ab"
+    ],
+    [
+     "a"
+    ],
+    [
+     "abc"
+    ],
+    [
+     "a"
+    ],
+    [
+     "a"
+    ],
+    [
+     "ab"
+    ]
+   ],
+   "want": [
+    null,
+    null,
+    true,
+    true,
+    null,
+    true,
+    true,
+    false,
+    null,
+    true,
+    true
+   ]
+  },
+  {
+   "ops": [
+    "Trie",
+    "search",
+    "startsWith",
+    "insert",
+    "search",
+    "startsWith",
+    "startsWith"
+   ],
+   "args": [
+    [],
+    [
+     "z"
+    ],
+    [
+     "z"
+    ],
+    [
+     "zzzz"
+    ],
+    [
+     "zzzz"
+    ],
+    [
+     "z"
+    ],
+    [
+     "zzz"
+    ]
+   ],
+   "want": [
+    null,
+    false,
+    false,
+    null,
+    true,
+    true,
+    true
+   ]
+  }
+ ],
+ "design-add-and-search-words-data-structure": [
+  {
+   "ops": [
+    "WordDictionary",
+    "addWord",
+    "search",
+    "search",
+    "search",
+    "addWord",
+    "search",
+    "search",
+    "search",
+    "search"
+   ],
+   "args": [
+    [],
+    [
+     "a"
+    ],
+    [
+     "a"
+    ],
+    [
+     "b"
+    ],
+    [
+     "."
+    ],
+    [
+     "abc"
+    ],
+    [
+     "..c"
+    ],
+    [
+     "a.c"
+    ],
+    [
+     "..."
+    ],
+    [
+     "...."
+    ]
+   ],
+   "want": [
+    null,
+    null,
+    true,
+    false,
+    true,
+    null,
+    true,
+    true,
+    true,
+    false
+   ]
+  },
+  {
+   "ops": [
+    "WordDictionary",
+    "search",
+    "search",
+    "addWord",
+    "search",
+    "search",
+    "addWord",
+    "search"
+   ],
+   "args": [
+    [],
+    [
+     "."
+    ],
+    [
+     "..."
+    ],
+    [
+     "x"
+    ],
+    [
+     "x"
+    ],
+    [
+     "."
+    ],
+    [
+     "xyz"
+    ],
+    [
+     ".yz"
+    ]
+   ],
+   "want": [
+    null,
+    false,
+    false,
+    null,
+    true,
+    true,
+    null,
+    true
+   ]
+  }
+ ],
+ "word-search-ii": [
+  {
+   "args": [
+    [
+     [
+      "ihhexdvxrcsn"
+     ]
+    ],
+    [
+     "c"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "targwuwrn",
+      "osiz"
+     ],
+     [
+      "ayzfwnkiegykdc",
+      "dlltizb"
+     ]
+    ],
+    [
+     "dmcrjutls",
+     "wcbv",
+     "yjch",
+     "dmioulfllgviwv",
+     "ctufrxhfomi",
+     "uwrhvkyybhbzkmi",
+     "gs",
+     "wkgupmuoeiehxrr"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "smlheqpcybdeufz",
+      "ntcmmtoqira",
+      "xdvryiyukdj",
+      "foaxxiq"
+     ],
+     [
+      "fqdujuqtgelyf",
+      "yqatkpadl",
+      "zjhbhsccxpcyrye",
+      "vpr"
+     ],
+     [
+      "iqt",
+      "gryxwgw",
+      "mvulo",
+      "qodhhckasrhshac"
+     ]
+    ],
+    [
+     "cbkc"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "pgrexssphzp",
+      "ngddvnlnnoxbv",
+      "udbmxkzdhgg"
+     ],
+     [
+      "oenfiohco",
+      "rdburacyhfnpp",
+      "mbfm"
+     ]
+    ],
+    [
+     "izzojnw"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "jgbs",
+      "rbxkbbspqqfb"
+     ],
+     [
+      "cfctcvhmd",
+      "shstbtcnvssqkig"
+     ],
+     [
+      "wkhimevujok",
+      "ycaotsdcrgqielc"
+     ],
+     [
+      "hljforwjtzuqavr",
+      "vdeid"
+     ]
+    ],
+    [
+     "reijtgwkgvui",
+     "pibcuniba"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "ifxorwnradc",
+      "werblsrenebjlzb"
+     ],
+     [
+      "lgvhvdlyrntxehf",
+      "zfnafxkznzvxz"
+     ],
+     [
+      "ifzw",
+      "mb"
+     ]
+    ],
+    [
+     "golj",
+     "zhhavgmkicyilu",
+     "mvrkadifs",
+     "bdtnl",
+     "zkntqdmsgibw",
+     "aqzrvxx",
+     "vglncvktkvdx",
+     "jqjvnkmwjregnvm"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "rajjgnz",
+      "tukooovgqp",
+      "zxfvcjqvutkcy"
+     ],
+     [
+      "vjhz",
+      "eabh",
+      "tyconusg"
+     ]
+    ],
+    [
+     "mheuwayy",
+     "dynhfzwqobrhdoe",
+     "ovqrtkyotxqnr",
+     "fxpoiyhu",
+     "yyqpu",
+     "iocw",
+     "hikkr"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "hmw",
+      "wgc"
+     ]
+    ],
+    [
+     "kronbgn",
+     "yswaysm",
+     "aljymnrx",
+     "rzthphinpamk",
+     "vzmxfoetram",
+     "svacuneofb",
+     "mkgok"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "ynicp",
+      "x",
+      "blhucyuby",
+      "h"
+     ],
+     [
+      "ateh",
+      "pvd",
+      "gowiylfttx",
+      "dyfjdsajsvmm"
+     ],
+     [
+      "gcswuhdwyjvt",
+      "dzszblrnvlcqu",
+      "anpdnl",
+      "owenfxquitz"
+     ]
+    ],
+    [
+     "ponxsikhciohy",
+     "stvmkapk",
+     "pgl",
+     "ikitwiraqgchx",
+     "pryhwpu",
+     "pozacjhmwhjv",
+     "lprqlnxrkl",
+     "oijihdxgkdxr",
+     "wfggxpixsyqtj"
+    ]
+   ],
+   "want": []
+  },
+  {
+   "args": [
+    [
+     [
+      "hlfja",
+      "reibbrjweuyp"
+     ]
+    ],
+    [
+     "asjppokfbipdcm",
+     "csuvbeez"
+    ]
+   ],
+   "want": []
+  }
+ ]
 }
