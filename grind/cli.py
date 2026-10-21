@@ -195,10 +195,20 @@ def start_session(state: dict, prob: dict, why: str) -> None:
 def cmd_next(args) -> None:
     state = store.load()
     if state["session"]:
-        p = sch.by_slug()[state["session"]["slug"]]
-        el = (sch.utcnow() - datetime.fromisoformat(state["session"]["started"])).total_seconds() / 60
-        print(f"Session already active: {p['title']}  ({_fmt_min(el)} elapsed)")
-        print("Finish it first:  grind done  /  grind skip")
+        sess = state["session"]
+        p = sch.by_slug()[sess["slug"]]
+        if "paused_at" in sess:
+            # Session is paused — resume it
+            paused_at = datetime.fromisoformat(sess["paused_at"])
+            paused_dur = (sch.utcnow() - paused_at).total_seconds()
+            sess["paused_total"] = sess.get("paused_total", 0.0) + paused_dur
+            del sess["paused_at"]
+            store.save(state)
+            print(f"Resumed: {p['title']}  (was paused)")
+        else:
+            el = (sch.utcnow() - datetime.fromisoformat(sess["started"])).total_seconds() / 60
+            print(f"Session already active: {p['title']}  ({_fmt_min(el)} elapsed)")
+            print("Finish it first:  grind done  /  grind skip  /  grind pause")
         return
     if not state.get("seen_intro"):
         print(INTRO)
@@ -232,6 +242,19 @@ def cmd_next(args) -> None:
     if args.edit or state["config"].get("auto_edit"):
         subprocess.call([os.environ.get("EDITOR", "vi"), state["session"]["scaffold"]])
 
+def cmd_pause(args) -> None:
+    """Pause the active session timer."""
+    state = store.load()
+    sess = state["session"]
+    if not sess:
+        sys.exit("No active session. Start one with: grind next")
+    if "paused_at" in sess:
+        sys.exit("Session already paused. Resume with: grind next")
+    sess["paused_at"] = sch.utcnow().isoformat()
+    store.save(state)
+    prob = sch.by_slug()[sess["slug"]]
+    print(f"Paused: {prob['title']}. Resume with: grind next")
+
 
 def cmd_help(args) -> None:
     """Print a friendly command overview grouped by purpose."""
@@ -239,6 +262,7 @@ def cmd_help(args) -> None:
     print()
     print("Daily loop:")
     print("  grind next      present the best problem, write scaffold, start timer")
+    print("  grind pause     pause the active session timer")
     print("  grind check     quick test (first 3 cases) while you solve")
     print("  grind done      run full suite, grade on outcome + time, schedule rep")
     print("  grind skip      drop session without grading (work kept in archive/)")
@@ -265,8 +289,13 @@ def cmd_done(args) -> None:
         sys.exit("No active session. Start one with: grind next")
     prob = sch.by_slug()[sess["slug"]]
     now = sch.utcnow()
+    paused_total = sess.get("paused_total", 0.0)
+    if "paused_at" in sess:
+        # Currently paused — add current pause to total
+        paused_at = datetime.fromisoformat(sess["paused_at"])
+        paused_total += (now - paused_at).total_seconds()
     elapsed = args.mins if args.mins is not None else \
-        (now - datetime.fromisoformat(sess["started"])).total_seconds() / 60
+        max(0.0, (now - datetime.fromisoformat(sess["started"])).total_seconds() / 60 - paused_total / 60)
     if args.rating is not None and not 1.0 <= args.rating <= 4.0:
         sys.exit("rating override must be within 1..4")
 
@@ -841,6 +870,8 @@ def main(argv=None) -> None:
     p.set_defaults(fn=cmd_next)
     p = sub.add_parser("help", help="show this friendly command overview")
     p.set_defaults(fn=cmd_help)
+    p = sub.add_parser("pause", help="pause the active session timer")
+    p.set_defaults(fn=cmd_pause)
     p = sub.add_parser("edit", help="open active session's scaffold in $EDITOR")
     p.set_defaults(fn=cmd_edit)
     p = sub.add_parser("web", help="open active session's LeetCode page in browser")

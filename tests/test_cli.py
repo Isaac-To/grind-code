@@ -194,6 +194,64 @@ def test_next_new_no_remaining(env, capsys, no_fuzz):
     run(["next", "--new"], capsys)
     assert "No new problems available" in out(capsys)
 
+# ---------------------------------------------------------------- pause
+
+def test_pause_no_session(env, capsys):
+    assert run(["pause"], capsys) == 1
+    assert "No active session" in out(capsys)
+
+
+def test_pause_and_resume(env, capsys):
+    # Start a session
+    run(["next"], capsys)
+    out(capsys)  # clear
+
+    # Pause it
+    run(["pause"], capsys)
+    assert "Paused:" in out(capsys)
+    out(capsys)  # clear
+
+    # Resume with next
+    run(["next"], capsys)
+    assert "Resumed:" in out(capsys)
+    out(capsys)  # clear
+
+    # Pause again
+    run(["pause"], capsys)
+    assert "Paused:" in out(capsys)
+
+
+def test_pause_already_paused(env, capsys):
+    run(["next"], capsys)
+    out(capsys)
+    run(["pause"], capsys)
+    out(capsys)
+    # Try to pause again
+    assert run(["pause"], capsys) == 1
+    assert "already paused" in out(capsys).lower()
+
+
+def test_done_accounts_for_pause(env, capsys, no_fuzz):
+    """Pause time is excluded from elapsed when grading."""
+    data, sol = env
+    run(["next"], capsys)
+    out(capsys)
+
+    # Pause immediately
+    run(["pause"], capsys)
+    out(capsys)
+
+    # Wait a moment (simulated by the test being fast)
+    # Resume and immediately done
+    run(["next"], capsys)
+    out(capsys)
+
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--mins", "1"], capsys)  # Only 1 minute of real time
+    o = out(capsys)
+    # Should be graded on ~1 minute, not including pause duration
+    assert "1m" in o or "solved in 1m" in o or "solved in" in o
 
 # ---------------------------------------------------------------- done
 

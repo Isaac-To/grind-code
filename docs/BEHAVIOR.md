@@ -118,6 +118,14 @@ Presents the single best problem and starts the session timer.
    to pull.` and exits 0.
 8. `--new`: picks a new problem ignoring the daily_new limit. If all 150
    problems have been seen, prints `No new problems available.` and exits 0.
+### `grind pause`
+Pauses the active session timer. The paused duration is excluded from the
+elapsed time when the session is later graded with `grind done`.
+1. Requires an active session; else exits 1: `No active session. Start one with: grind next`.
+2. If already paused, exits 1: `Session already paused. Resume with: grind next`.
+3. Records the pause start time; `grind next` resumes by adding the pause duration
+   to `paused_total` and clearing `paused_at`.
+4. Output: `Paused: <title>. Resume with: grind next`.
 
 ### `grind done`
 Stops the timer and grades. Order of operations:
