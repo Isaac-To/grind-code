@@ -858,11 +858,11 @@ def test_extras_prints_hand_written_cases(env, capsys):
     run(["extras", "binary-search"], capsys)
     o = out(capsys)
     assert "Edge cases for binary-search" in o
-    assert "case 1:" in o
-    assert "args=" in o and "want=" in o
-    # Should have many generated cases (at least 20)
-    case_count = o.count("case ")
-    assert case_count >= 20, f"expected at least 20 cases, got {case_count}"
+    assert "hidden cases" in o
+    assert "not shown" in o
+    # Should NOT show actual cases
+    assert "args=" not in o
+    assert "want=" not in o
 
 
 def test_reference_unknown_slug_exits_with_hint(env, capsys):
@@ -871,8 +871,9 @@ def test_reference_unknown_slug_exits_with_hint(env, capsys):
 
 
 def test_extras_unknown_slug_exits_with_hint(env, capsys):
-    assert run(["extras", "no-such-problem"], capsys) == 1
-    assert "no edge cases for no-such-problem" in out(capsys)
+    run(["extras", "no-such-problem"], capsys)
+    o = out(capsys)
+    assert "no edge cases for no-such-problem" in o
 
 
 def test_reference_defaults_to_active_session(env, capsys):

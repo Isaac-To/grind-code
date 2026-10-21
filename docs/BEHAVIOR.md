@@ -181,15 +181,14 @@ gates against the real runner.
 3. Output: one header line, then the full file verbatim (no transformation).
 
 ### `grind extras [slug]`
-Prints the hand-written edge cases that `grind done`'s full suite runs for
-`slug` (the bundled examples live in the scaffold; these are the extra cases
-verified against the reference solution).
-1. Slug resolution: argument → active session. None available → exit 1:
-   `no slug given — pass one: \`grind reference <slug>\``.
-2. Missing `scripts/extras/<topic>.json` or the slug absent from it → exit 1
-   with a hint.
-3. Output: one header line, then each case as `case i: args=<args> want=<want>`.
-   Run them interactively with `grind check <slug>`.
+Edge cases are **hidden** — like LeetCode's hidden test cases. They run
+silently during `grind done`; `grind check` only runs the first few bundled
+examples (the published ones).
+1. Slug resolution: argument → active session. None available → prints
+   `no edge cases for <slug> — only the bundled examples exist` and exits 0.
+2. Output: one line: `Edge cases for <slug>: N hidden cases (run with \`grind done\`)`.
+   The actual cases are never shown.
+
 ### `grind skip`
 Drops the active session **without grading or logging**. No session → exit 1.
 The ungraded attempt is not lost: if its file exists it is parked as

@@ -561,18 +561,20 @@ def cmd_reference(args) -> None:
 
 
 def cmd_extras(args) -> None:
-    """Print the hand-written edge cases `grind done`'s full suite runs."""
+    """Edge cases are hidden (like LeetCode's hidden tests). They run silently
+    during `grind done`; `grind check` only runs the first few bundled examples.
+    """
     slug = _slug_from_session(args)
     path = _scripts_root() / "extras" / f"{slug}.json"
     if not path.exists():
-        sys.exit(f"no edge cases for {slug} — only the bundled examples exist")
+        print(f"no edge cases for {slug} — only the bundled examples exist")
+        return
     cases = json.loads(path.read_text()).get(slug)
     if not cases:
-        sys.exit(f"no edge cases for {slug} — only the bundled examples exist")
-    print(f"Edge cases for {slug} (verified against the reference solution) "
-          f"— run them with: grind check {slug}")
-    for i, t in enumerate(cases, 1):
-        print(f"  case {i}: args={t['args']!r} want={t['want']!r}")
+        print(f"no edge cases for {slug} — only the bundled examples exist")
+        return
+    print(f"Edge cases for {slug}: {len(cases)} hidden cases (run with `grind done`)")
+    print("These are not shown — like LeetCode's hidden test cases.")
 
 # ---------------------------------------------------------------- views
 
