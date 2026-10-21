@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "auto_web": False,                    # grind next opens the problem page automatically
     "auto_edit": False,                   # grind next opens the scaffold in $EDITOR automatically
     "backup_remote": "",                  # git url of your (private) backup repo
+    "update_check": True,                 # daily HTTPS check for a newer version (grind update applies it)
 }
 
 

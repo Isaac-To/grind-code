@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grind"
-version = "0.1.0"
+dynamic = ["version"]
 description = "FSRS-driven LeetCode fluency trainer (NeetCode 150, spaced repetition, timer-based grading)"
 requires-python = ">=3.10"
 dependencies = ["fsrs>=6.0"]
@@ -12,6 +12,9 @@ dependencies = ["fsrs>=6.0"]
 [project.scripts]
 grind = "grind.cli:main"
 
+
+[tool.setuptools.dynamic]
+version = {attr = "grind.__version__"}
 [tool.setuptools]
 packages = ["grind"]
 

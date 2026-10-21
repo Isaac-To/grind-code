@@ -323,18 +323,108 @@ def test_next_review_keeps_ungraded_work(env, capsys):
     assert not (sol / "archive").exists()
 
 
-def test_done_marks_file_as_graded(env, capsys, no_fuzz):
+def test_done_archives_attempt_immediately(env, capsys, no_fuzz):
     data, sol = env
     write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
     open_session("contains-duplicate")
     run(["done", "--mins", "5"], capsys)
-    assert store.load()["graded_files"]["contains-duplicate"] is True
+    o = out(capsys)
+    arch = sol / "archive" / "contains-duplicate" / "attempt-1.py"
+    assert "len(set(nums))" in arch.read_text()                  # attempt kept verbatim
+    assert not (sol / "contains-duplicate.py").exists()          # solutions/ is clean
+    assert "attempt archived" in o and "attempt-1.py" in o
+    assert "contains-duplicate" not in store.load()["graded_files"]  # no flag needed anymore
 
 
-def test_done_without_solution_file_not_marked(env, capsys, no_fuzz):
+def test_done_archives_failing_attempt_too(env, capsys, no_fuzz):
+    """An unsolved rep is still history — graded means filed, solved or not."""
+    data, sol = env
+    write_solution(sol, "contains-duplicate",
+                   "class Solution:\n    def containsDuplicate(self, nums):\n        return False",
+                   [(([1, 2, 3, 1],), True)])
+    open_session("contains-duplicate")
+    run(["done", "--mins", "10"], capsys)
+    assert (sol / "archive" / "contains-duplicate" / "attempt-1.py").exists()
+    assert not (sol / "contains-duplicate.py").exists()
+
+
+def test_done_without_solution_file_no_archive(env, capsys, no_fuzz):
     open_session("contains-duplicate")             # no file was ever written
     run(["done", "--fail", "--mins", "5"], capsys)
+    sol = env[1]
+    assert not (sol / "archive").exists()
     assert "contains-duplicate" not in store.load()["graded_files"]
+
+
+def test_done_files_statement_to_archive(env, capsys, no_fuzz):
+    data, sol = env
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "contains-duplicate.md").write_text("# statement\n")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    open_session("contains-duplicate")
+    run(["done", "--mins", "5"], capsys)
+    arch = sol / "archive" / "contains-duplicate"
+    assert (arch / "attempt-1.py").exists() and (arch / "statement.md").exists()
+    assert not (sol / "contains-duplicate.md").exists()   # solutions/ is clean
+
+
+def test_next_sweeps_strays_into_archive(env, capsys):
+    """solutions/ shows only the active problem: other problems' files are
+    filed automatically (passing → attempt-N, WIP-ish → wip.py, md → statement.md)."""
+    data, sol = env
+    write_solution(sol, "two-sum", TWO_SUM_BODY, [(([2, 7, 11, 15], 9), [0, 1])])
+    write_solution(sol, "valid-anagram",
+                   "class Solution:\n    def isAnagram(self, s, t):\n        return True  # wip",
+                   [])
+    (sol / "two-sum.md").write_text("# Two Sum\n")
+    run(["next"], capsys)                     # picks contains-duplicate (first new)
+    arch = sol / "archive"
+    assert "return [0, 1]" in (arch / "two-sum" / "attempt-1.py").read_text()
+    assert (arch / "two-sum" / "statement.md").exists()
+    assert "wip" in (arch / "valid-anagram" / "wip.py").read_text()
+    assert not (sol / "two-sum.py").exists() and not (sol / "two-sum.md").exists()
+    assert not (sol / "valid-anagram.py").exists()
+    assert (sol / "contains-duplicate.py").exists()        # active problem untouched
+
+
+def test_next_sweep_never_touches_unknown_files(env, capsys):
+    data, sol = env
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "notes.txt").write_text("my scratch notes")
+    (sol / "random.md").write_text("not a problem statement")
+    run(["next"], capsys)
+    assert (sol / "notes.txt").exists() and (sol / "random.md").exists()
+
+
+def test_next_restores_wip_when_problem_picked(env, capsys):
+    """A parked wip.py comes back the moment its problem is picked."""
+    data, sol = env
+    _due_review("two-sum")
+    (sol / "archive" / "two-sum").mkdir(parents=True)
+    (sol / "archive" / "two-sum" / "wip.py").write_text("# HALF-DONE WORK\n")
+    run(["next"], capsys)
+    assert "HALF-DONE" in (sol / "two-sum.py").read_text()   # resumed, not blanked
+    assert not (sol / "archive" / "two-sum" / "wip.py").exists()
+
+
+def test_skip_files_wip_then_resume_and_done(env, capsys, no_fuzz):
+    """The whole skip workflow: park WIP + statement, resume on repick, grade
+    normally — nothing is ever lost."""
+    data, sol = env
+    run(["next"], capsys)                     # contains-duplicate active, md exists
+    (sol / "contains-duplicate.py").write_text("# MID-SOLUTION\n")
+    run(["skip"], capsys)
+    o = out(capsys)
+    arch = sol / "archive" / "contains-duplicate"
+    assert "filed" in o and (arch / "wip.py").exists() and (arch / "statement.md").exists()
+    assert not (sol / "contains-duplicate.py").exists()
+
+    run(["next"], capsys)                     # due-fail repick: WIP comes back
+    assert "MID-SOLUTION" in (sol / "contains-duplicate.py").read_text()
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    run(["done", "--mins", "5"], capsys)
+    assert "len(set(nums))" in (arch / "attempt-1.py").read_text()
+    assert not (arch / "wip.py").exists()     # graded: it graduated to attempt-N
 
 # ------------------------------------------------------- existing solutions
 

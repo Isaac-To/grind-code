@@ -43,6 +43,8 @@ bank slug:
 | `logs` | list of review records | complete attempt history, chronological |
 | `session` | object or null | active problem + timer start (§3) |
 | `last` | slug or absent | most recently graded problem (for `grind check` fallback) |
+| `graded_files` | {slug: true} | legacy flags: attempts graded before done-time archiving; consumed on resurface |
+| `update` | {ts, latest} | daily version-check bookkeeping (§2 `grind update`) |
 
 Review log record: `{slug, rating (float 1..4), solved (bool), elapsed (minutes),
 new (bool — first-ever attempt), ts (aware ISO-8601 UTC), tests ("p/t" or null)}`.
@@ -52,7 +54,9 @@ defaults on load; user values are never overwritten.
 
 ### Solutions — `$GRIND_SOLUTIONS/<slug>.py` + `<slug>.md` (default `./solutions/`)
 `grind next` sets up the **whole environment for the one problem**; both files
-are created once and **never overwritten**:
+are created whenever absent and **never overwritten in place** — when a problem
+is done with, its files are *filed* into `archive/<slug>/` and re-created
+(statement re-rendered from the bundle, scaffold blank) when it returns:
 
 - `<slug>.md` — the statement: header (num, title, difficulty, topic, link,
   target + phase), the full problem text with examples and constraints, and a
@@ -68,6 +72,14 @@ are created once and **never overwritten**:
 - A problem with no bundled environment data (none today) falls back to the
   minimal scaffold: header docstring, `class Solution` with a `def solve(self)`
   stub, and an empty `TESTS` template to fill by hand.
+- `archive/<slug>/` — the problem's whole history, kept forever and backed up
+  like everything else: `attempt-1.py, -2, …` (graded attempts, filed by
+  `grind done`), `wip.py` (an ungraded attempt parked by `grind skip`,
+  restored when the problem is picked again), `statement.md` (the statement,
+  re-rendered whenever the problem returns). `solutions/` itself shows only
+  the active problem: at every `grind next`, stray files of *other* known
+  problems are swept into their archive here (passing → `attempt-N`, else
+  `wip.py`; statements → `statement.md`). Unknown files are never touched.
 
 ---
 
@@ -86,9 +98,11 @@ Presents the single best problem and starts the session timer.
 3. Picks via the selection algorithm (§7). If nothing is pickable:
    `All caught up — nothing due right now.` plus `Next review: <title> in <interval>`
    if any card exists with a future due date.
-4. Sets up the problem environment (§1 Solutions) if absent — scaffold **and**
-   statement — and records `session = {slug, started (UTC now), why, scaffold}`:
-   the timer starts **now**.
+4. Sweeps `solutions/` (§1 Solutions): stray files of other known problems
+   go to their archive; a parked `wip.py` for the picked problem is restored
+   verbatim as the scaffold. Then the environment is set up if absent —
+   scaffold **and** statement — and `session = {slug, started (UTC now),
+   why, scaffold}` is recorded: the timer starts **now**.
 5. Output: bold `num. title  difficulty · topic · "review"|"new problem"`,
    the LeetCode URL, the scaffold path with `target <X> · <phase>` and, when
    bundled data exists, `· statement: <slug>.md path`, and a one-line action
@@ -115,7 +129,10 @@ Stops the timer and grades. Order of operations:
      exits 1 with *session kept*: `no answer — session kept, retry with: grind done`).
 5. Rating: `--rating` if given, else derived from timer (§5.3). Applied to FSRS
    (§5.4). A log record is appended (`tests` = `"passed/total"` when the gate ran);
-   `session` cleared; `last` = slug; state saved.
+   `session` cleared; `last` = slug; state saved. If the attempt file exists
+   it is **archived immediately**: moved to `archive/<slug>/attempt-N.py`
+   (solved or not) and the statement joins it at `statement.md`, so
+   `solutions/` is clean for the next problem.
 6. Output: `Title: solved|unsolved in <elapsed> (target <X> · <phase>) · rating <r>/4`,
    `next review in <interval>`, then context lines:
    - unsolved + failing gate: `failing tests — counted as unsolved; fix it and grind next brings it right back.`
@@ -123,6 +140,7 @@ Stops the timer and grades. Order of operations:
    - solved but slow (fluency < 0.55): `solved, but a struggle — FSRS will keep this one close until it's smooth.`
    - on transition into `locked`: `target locked at your demonstrated pace — sustaining it now earns steady good ratings.` (printed once per lock)
    - `new today: <min(n,cap)>/<cap>` (display clamped to the cap) and `due now: <count>`.
+   - when a file was archived: `attempt archived → <archive path>`.
 
 ### `grind check [slug] [--n N] [--all]`
 Quick verification while solving — a **subset** of the suite (default: first 3
@@ -139,6 +157,10 @@ cases; `--n N` first N; `--all` everything).
 
 ### `grind skip`
 Drops the active session **without grading or logging**. No session → exit 1.
+The ungraded attempt is not lost: if its file exists it is parked as
+`archive/<slug>/wip.py` (the latest skip wins) with the statement beside it,
+printing `work in progress filed → <path>`; the next time the problem is
+picked, the WIP is restored exactly where it left off.
 
 ### `grind status`
 One-screen snapshot: `seen/150 · due · new today (clamped) · streak cur (best) ·
@@ -164,6 +186,29 @@ No argument: prints all keys. With `key=value`: the value is type-validated
 against the key's default (bool keys take `true`/`false`; numeric keys take
 numbers) — mismatches exit 1 with a clear message and **never** modify state.
 Unknown key → exit 1. Persisted immediately.
+
+### `grind update`
+Applies an available update — **never automatic**: it runs only when the user
+types it.
+1. The install must be a git checkout (the editable clone); otherwise exit 1
+   with the manual command (`pip install --force-reinstall git+…`).
+2. Refuses a dirty working tree (uncommitted changes to tracked files) —
+   exit 1 with `commit or stash them, then retry`. Untracked files don't block.
+3. `git pull --ff-only` in the install's own clone — grind supplies no fetch
+   URL, so code comes from wherever the user cloned. A diverged pull fails in
+   git's hands; grind exits 1 having touched nothing.
+4. Re-installs editable via the running interpreter's pip
+   (`python -m pip install -e .`) so the pulled code and entry points take
+   effect; a pip failure exits 1 printing the exact manual command.
+5. Prints `grind <version> — up to date` using the freshly pulled version.
+
+Version check (announcement only — installs nothing): after every command, at
+most once per 24h and only when config `update_check` is true, grind makes one
+HTTPS GET to its own `__init__.py` on GitHub main — 3s timeout, 16KB cap,
+parsed as text and never executed; nothing beyond the request is sent. A newer
+version prints `update available: grind <v> (you have <v>) — run: grind update`
+plus the disable hint. Every failure is silent — grind works fully offline.
+The stamp lives in state `update = {ts, latest}`.
 
 ### `grind backup [--remote URL]` / `grind restore [url] [--force]`
 Backup is **invisible and always-on**:
@@ -332,6 +377,7 @@ side effects on state; `done` records the result.
 | `auto_web` | false | `next` always opens the problem page |
 | `auto_edit` | false | `next` always opens the scaffold in `$EDITOR` |
 | `backup_remote` | "" | git url of your backup repo (any host; asked on first boot) |
+| `update_check` | true | daily HTTPS version check (announcement only; `grind update` applies) |
 
 ## 10. Environment
 | var | default | meaning |
@@ -343,8 +389,13 @@ side effects on state; `done` records the result.
 ## 11. Invariants
 - The bank and the problem environments (statements, signatures, example
   tests) are static and offline: no network is ever required after install.
-- Nothing is ever deleted: logs only grow; scaffolds and statements are only
-  created.
+- The version check is the only network use: consent-gated (`update_check`),
+  silent on failure, and it never installs anything — only `grind update`,
+  typed by the user, ever changes the installed code.
+- Nothing is ever deleted: logs only grow; solution files and statements
+  only ever move deeper into `archive/` — and WIP parked there comes back.
+- `solutions/` shows only the active problem; files of other problems live
+  in their `archive/<slug>/` and are never lost, only filed.
 - `grind skip` never writes history; `grind done` always does (even failures —
   a failed attempt is real and resets readiness).
 - Grading never lies: with TESTS present, a failing suite is unsolved

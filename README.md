@@ -67,6 +67,21 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
+## Updates
+
+Once a day grind fetches its own `__init__.py` from GitHub main over HTTPS,
+compares versions, and if there's a newer one prints a one-line heads-up
+(`update available: grind 0.2.0 … — run: grind update`). That's all the
+"automatic" there is: the check sends nothing but the request, nothing
+fetched is ever executed, it's silent when offline, and
+`grind config update_check=false` turns it off entirely.
+
+`grind update` applies an update — only when you type it: `git pull
+--ff-only` in your clone (from *your* origin, wherever you cloned it) and a
+reinstall via the running venv's pip. It refuses a dirty working tree so your
+local changes are never clobbered, and a diverged history fails safely
+instead of merging. Not a git checkout? It prints the manual command instead.
+
 ## Daily loop
 
 ```bash
@@ -100,8 +115,10 @@ plumbing:
   problem's examples** — including operation sequences for design problems
   (`MinStack`, `LRUCache`, …) and the "any valid answer" checks (any-order
   subsets, any legal N-Queens board, float tolerance).
-- `solutions/archive/<slug>/attempt-1.py, -2, …` — every previous rep's
-  solution, filed away automatically so reviews always start from a blank file.
+- `solutions/archive/<slug>/` — the problem's whole history: `attempt-1.py,
+  -2, …` (graded attempts, filed automatically on `grind done`), `wip.py`
+  (a parked `grind skip`), `statement.md`. `solutions/` itself holds only
+  the problem you're working on right now.
 
 You write the body; `grind check`/`grind done` convert the printed values
 (`[1,2,3]` arrays) into linked lists/trees/graph nodes automatically and
@@ -115,15 +132,15 @@ With no TESTS defined, `done` falls back to asking whether you solved it.
 `grind check` is the lightweight loop while solving — just a few cases to
 catch silly mistakes early.
 
-Reviews are recall tests, so when a problem resurfaces, its previous solution
-moves itself to `solutions/archive/<slug>/` (kept forever, backed up like
-everything else) and the scaffold resets to blank — you never re-solve on top
-of your old code. Solutions you wrote **before** using grind get the same
-treatment: if the file on disk passes its own full `TESTS` suite, it's a
-finished solution — grind archives it the first time it picks that problem
-and starts you from a blank file. Work in progress is never reset: a file
-that fails its tests (or has none) stays exactly as it is, so `grind skip`
-and a later `grind next` pick up where you left off.
+Grading is the cutoff: `grind done` files the attempt under
+`solutions/archive/<slug>/attempt-N.py` (kept forever, backed up like
+everything else) the moment it's graded — solved or not — and the statement
+goes with it. `solutions/` always shows just the one problem in front of
+you: at every `grind next`, stray files of other known problems are swept
+into their archive automatically — a passing file is a finished solution
+(`attempt-N`, and you start from a blank file); anything else is resumable
+work (`wip.py`), including a `grind skip`, restored verbatim when that
+problem comes back. Files that aren't known problems are never touched.
 
 Set-and-forget: `grind config auto_edit=true` makes every `grind next` open
 the scaffold in `$EDITOR` (`auto_web=true` likewise opens the problem page),

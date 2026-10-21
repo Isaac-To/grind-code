@@ -232,8 +232,9 @@ def test_backup_restore_roundtrip(env, capsys, no_gh, remote, tmp_path, monkeypa
     s1 = json.load(open(env[0] / "state.json"))
     s2 = json.load(open(data2 / "state.json"))
     assert s1["logs"] == s2["logs"] and s1["cards"] == s2["cards"]
-    assert (sol2 / f"{SOL}.py").exists()
-    assert run(["check", SOL], capsys) is None       # solution works post-restore
+    arch2 = sol2 / "archive" / SOL / "attempt-1.py"
+    assert "len(set(nums))" in arch2.read_text()  # the graded attempt restored intact
+    assert not (sol2 / f"{SOL}.py").exists()      # nothing active: done archived it
     run(["status"], capsys)
     o = out(capsys)
     assert "1/150 seen" in o and "proven 1/150" in o
@@ -264,7 +265,7 @@ def test_backup_excludes_pycache(env, capsys, no_gh):
     run(["done", "--mins", "8"], capsys)
     repo = env[0] / "repo"
     assert (repo / "state.json").exists()
-    assert (repo / "solutions" / f"{SOL}.py").exists()
+    assert (repo / "solutions" / "archive" / SOL / "attempt-1.py").exists()
     assert not (repo / "solutions" / "__pycache__").exists()
 
 

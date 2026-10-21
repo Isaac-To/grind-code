@@ -17,6 +17,8 @@ from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from . import update
+from . import __version__
 from . import scheduler as sch
 from . import problems
 from . import store
@@ -33,6 +35,9 @@ The daily loop:
 Everything else is automatic: what to practice, when to review, and how interview-ready
 you are (grind status / topics / stats show the numbers). State lives in ~/.grind-code,
 and every session is backed up automatically — you'll pick where in a moment.
+grind also checks GitHub once a day for a newer version and tells you how to
+get it (grind update). Nothing is ever installed without your say-so, and
+grind config update_check=false turns the check off.
 """
 DIFF_COLOR = {"Easy": "\033[32m", "Medium": "\033[33m", "Hard": "\033[31m"}
 RESET = "\033[0m"
@@ -79,6 +84,48 @@ def _archive_solution(sol_dir: Path, slug: str, scaffold: Path) -> Path:
     return dest
 
 
+def _archive_statement(sol_dir: Path, slug: str) -> None:
+    """File the statement away with the problem's history — solutions/ shows
+    only the active problem. It is re-rendered from the bundle whenever the
+    problem returns, so this is pure tidying."""
+    md = sol_dir / f"{slug}.md"
+    if md.exists():
+        dest = sol_dir / "archive" / slug / "statement.md"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(md), str(dest))
+
+
+def _file_wip(sol_dir: Path, slug: str, scaffold: Path) -> Path:
+    """Park an ungraded attempt as archive/<slug>/wip.py — the latest skip
+    wins; it is restored the next time the problem is picked."""
+    dest = sol_dir / "archive" / slug / "wip.py"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(scaffold), str(dest))
+    return dest
+
+
+def _tidy_solutions(sol_dir: Path, keep: str, state: dict) -> None:
+    """solutions/ holds only the active problem's environment. Files of other
+    known problems — pre-grind solutions, strays, restore leftovers — are
+    filed into their archive/ here: a passing file is a finished solution
+    (attempt-N), anything else is resumable WIP (wip.py), statements go to
+    statement.md. Unknown files are never touched."""
+    bank = sch.by_slug()
+    for p in sorted(sol_dir.iterdir()):
+        if not p.is_file() or p.stem == keep or p.suffix not in (".py", ".md"):
+            continue
+        slug = p.stem
+        if slug not in bank:
+            continue
+        if p.suffix == ".md":
+            _archive_statement(sol_dir, slug)
+        elif _file_passes_tests(p, slug):
+            _archive_solution(sol_dir, slug, p)
+        else:
+            _file_wip(sol_dir, slug, p)
+        state["graded_files"].pop(slug, None)  # its attempt is filed; flag's job is done
+
+
 def _file_passes_tests(scaffold: Path, slug: str) -> bool:
     """The file on disk is a complete working solution: it loads and passes
     its own full TESTS suite. Blank scaffolds, WIP, and files without tests
@@ -102,13 +149,19 @@ def start_session(state: dict, prob: dict, why: str) -> None:
     scaffold = sol_dir / f"{prob['slug']}.py"
     target, phase = sch.target_info(state, prob)
     entry = problems.get(prob["slug"])
+    _tidy_solutions(sol_dir, prob["slug"], state)
+    wip = sol_dir / "archive" / prob["slug"] / "wip.py"
+    if not scaffold.exists() and wip.exists():
+        # An ungraded attempt was parked here earlier — resume, not restart.
+        shutil.move(str(wip), str(scaffold))
     archived = None
     if scaffold.exists():
         if why == "review" and state["graded_files"].pop(prob["slug"], None):
-            # SRS resurfacing: the file still holds the previous rep's solution.
-            # Recall is the point — keep the old attempt in archive/ and start
-            # this rep from a blank scaffold. Ungraded work (a skip, mid-solve
-            # edits) has no flag and is never touched.
+            # Legacy migration: older grind versions left the graded file in
+            # place with this flag, archiving it only on resurface. Consume
+            # the flag, keep the old attempt in archive/, start from a blank
+            # scaffold. Ungraded work (a skip, mid-solve edits) has no flag
+            # and is never touched.
             archived = _archive_solution(sol_dir, prob["slug"], scaffold)
         elif _file_passes_tests(scaffold, prob["slug"]):
             # A working solution is already on disk — a file from before grind,
@@ -219,8 +272,14 @@ def cmd_done(args) -> None:
     state["logs"].append({"slug": sess["slug"], "rating": round(rating_f, 2), "solved": solved,
                           "elapsed": round(elapsed, 1), "new": was_new, "ts": now.isoformat(),
                           "tests": f"{passed}/{total}" if total else None})
+    archived = None
     if sol_path.exists():
-        state["graded_files"][sess["slug"]] = True   # next rep starts from a blank scaffold
+        # A graded rep is history the moment it's graded: file it under
+        # archive/ and leave solutions/ to work in progress only. The
+        # graded_files flag is no longer set here — but legacy state may still
+        # carry one from the old deferred behavior; start_session consumes it.
+        archived = _archive_solution(sol_path.parent, sess["slug"], sol_path)
+    _archive_statement(sol_path.parent, sess["slug"])   # only the active problem stays visible
     state["session"] = None
     state["last"] = sess["slug"]
     store.save(state)
@@ -240,6 +299,8 @@ def cmd_done(args) -> None:
         print("  solved, but a struggle — FSRS will keep this one close until it's smooth.")
     print(f"  new today: {min(sch.new_today(state, now), state['config']['daily_new'])}/{state['config']['daily_new']}   "
           f"due now: {len(sch.due_reviews(state, now))}")
+    if archived:
+        print(f"  attempt archived → {archived}")
     res = _do_backup(state)
     store.save(state)  # persist backup flags mutated during the silent backup
     if res["error"]:
@@ -260,8 +321,17 @@ def _ask_solved(prob: dict, elapsed: float) -> bool:
 
 def cmd_skip(args) -> None:
     state = store.load()
-    if not state["session"]:
+    sess = state["session"]
+    if not sess:
         sys.exit("No active session.")
+    sol_dir = Path(os.environ.get("GRIND_SOLUTIONS", "solutions"))
+    scaffold = sol_dir / f"{sess['slug']}.py"
+    if scaffold.exists():
+        # Not graded — the work is kept and resumed when the problem returns.
+        dest = _file_wip(sol_dir, sess["slug"], scaffold)
+        state["graded_files"].pop(sess["slug"], None)
+        print(f"  work in progress filed → {dest}")
+    _archive_statement(sol_dir, sess["slug"])
     state["session"] = None
     store.save(state)
     print("Session dropped (not graded, not counted).")
@@ -626,11 +696,14 @@ def main(argv=None) -> None:
     p.add_argument("url", nargs="?", help="backup repo url (defaults to backup_remote)")
     p.add_argument("--force", action="store_true", help="overwrite existing local state")
     p.set_defaults(fn=cmd_restore)
+    p = sub.add_parser("update", help="pull the latest version and reinstall (refuses a dirty tree)")
+    p.set_defaults(fn=update.cmd_update)
+    ap.add_argument("--version", action="version", version=f"grind {__version__}")
     args = ap.parse_args(argv)
     if not getattr(args, "fn", None):
         args = ap.parse_args(["next"], namespace=args)
     args.fn(args)
-
+    update.maybe_check()
 
 if __name__ == "__main__":
     main()
