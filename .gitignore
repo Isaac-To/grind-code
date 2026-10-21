@@ -1,0 +1,19 @@
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# environments
+.venv/
+venv/
+
+# tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# user practice data (never commit personal grind state or solutions)
+solutions/
+.grind-code/

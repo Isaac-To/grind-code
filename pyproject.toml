@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grind"
+version = "0.1.0"
+description = "FSRS-driven LeetCode fluency trainer (NeetCode 150, spaced repetition, timer-based grading)"
+requires-python = ">=3.10"
+dependencies = ["fsrs>=6.0"]
+
+[project.scripts]
+grind = "grind.cli:main"
+
+[tool.setuptools]
+packages = ["grind"]
+
+[tool.setuptools.package-data]
+grind = ["bank.json"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["grind"]
+
+[tool.coverage.report]
+fail_under = 95
+exclude_lines = ["if __name__ == .__main__.:"]

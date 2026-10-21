@@ -1,0 +1,521 @@
+"""grind.cli — every command, every branch, through the real entry point."""
+from __future__ import annotations
+
+import builtins
+import sys
+
+import pytest
+
+from grind import cli
+from grind import scheduler as sch
+from grind import store
+
+from conftest import (add_log, local, now_utc, open_session, seed_review_card,
+                      write_solution)
+
+SOLVED_BODY = "class Solution:\n    def containsDuplicate(self, nums):\n        return len(set(nums)) != len(nums)"
+
+
+def run(argv, capsys):
+    """Invoke cli.main; returns exit code (None if it returned normally).
+    sys.exit("msg") prints the message to stderr only when SystemExit
+    propagates uncaught — replicate that here so tests see real output."""
+    try:
+        cli.main(argv)
+        return None
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            print(e.code, file=sys.stderr)
+            return 1
+        return e.code
+
+
+def out(capsys):
+    """Combined stdout+stderr: sys.exit('msg') writes to stderr."""
+    r = capsys.readouterr()
+    return r.out + r.err
+
+
+# ---------------------------------------------------------------- helpers
+
+def test_url_format():
+    assert cli.url("two-sum") == "https://leetcode.com/problems/two-sum/"
+
+
+def test_fmt_min():
+    assert cli._fmt_min(30) == "30m"
+    assert cli._fmt_min(90) == "1h30m"
+    assert cli._fmt_min(75.4) == "1h15m"
+
+
+# ---------------------------------------------------------------- next
+
+def test_next_creates_scaffold_and_session(env, capsys):
+    assert run(["next"], capsys) is None
+    o = out(capsys)
+    assert "Contains Duplicate" in o and "new problem" in o
+    assert "https://leetcode.com/problems/contains-duplicate/" in o
+    assert "(target 15m · prior)" in o
+    data, sol = env
+    sc = sol / "contains-duplicate.py"
+    assert sc.exists()
+    body = sc.read_text()
+    assert "217. Contains Duplicate" in body
+    assert "class Solution" in body and "TESTS = [" in body
+    s = store.load()
+    assert s["session"]["slug"] == "contains-duplicate"
+    assert s["session"]["started"]
+
+
+def test_next_never_overwrites_existing_scaffold(env, capsys):
+    data, sol = env
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "contains-duplicate.py").write_text("# MY WORK\n")
+    run(["next"], capsys)
+    assert (sol / "contains-duplicate.py").read_text() == "# MY WORK\n"
+
+
+def test_next_active_session_short_circuits(env, capsys):
+    open_session("two-sum")
+    assert run(["next"], capsys) is None
+    o = out(capsys)
+    assert "Session already active" in o and "grind done" in o
+
+
+def test_next_caught_up_without_cards(env, capsys):
+    s = store.load()
+    s["config"]["daily_new"] = 0
+    store.save(s)
+    run(["next"], capsys)
+    o = out(capsys)
+    assert "All caught up" in o
+    assert "Next review" not in o
+
+
+def test_next_caught_up_reports_upcoming(env, capsys, no_fuzz):
+    s = store.load()
+    s["config"]["daily_new"] = 0
+    seed_review_card(s, "two-sum")  # future due
+    store.save(s)
+    run(["next"], capsys)
+    assert "Next review:" in out(capsys)
+
+
+def test_next_web_flag_and_config(env, capsys, monkeypatch):
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", lambda u: opened.append(u))
+    run(["next", "--web"], capsys)
+    assert opened == ["https://leetcode.com/problems/contains-duplicate/"]
+    s = store.load()
+    s["config"]["auto_web"] = True
+    s["session"] = None
+    store.save(s)
+    run(["next"], capsys)
+    assert len(opened) == 2
+
+
+def test_next_edit_flag_and_config(env, capsys, monkeypatch):
+    called = []
+    monkeypatch.setattr(cli.subprocess, "call", lambda a: called.append(a))
+    run(["next", "--edit"], capsys)
+    assert len(called) == 1 and called[0][1].endswith("contains-duplicate.py")
+    s = store.load()
+    s["config"]["auto_edit"] = True
+    s["session"] = None
+    store.save(s)
+    run(["next"], capsys)
+    assert len(called) == 2
+
+
+# ---------------------------------------------------------------- done
+
+def test_done_gate_pass_grades_solved(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    assert run(["done", "--mins", "8"], capsys) is None
+    o = out(capsys)
+    assert "full suite: 2/2 passed" in o
+    assert "solved in 8m" in o and "rating 3.3" in o
+    assert "next review in" in o and "Next: grind next" in o
+    s = store.load()
+    log = s["logs"][-1]
+    assert log["solved"] is True and log["new"] is True
+    assert log["tests"] == "2/2" and log["elapsed"] == 8.0
+    assert s["session"] is None and s["last"] == "contains-duplicate"
+
+
+def test_done_gate_fail_grades_unsolved(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate",
+                   "class Solution:\n    def containsDuplicate(self, nums):\n        return True",
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--mins", "10"], capsys)
+    o = out(capsys)
+    assert "full suite: 1/2 passed" in o
+    assert "unsolved in 10m" in o and "rating 1.00/4" in o
+    assert "counted as unsolved" in o
+    assert store.load()["logs"][-1]["solved"] is False
+
+
+def test_done_flags_overridden_by_failing_tests(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate",
+                   "class Solution:\n    def containsDuplicate(self, nums):\n        return True",
+                   [(([1, 2, 3, 4],), False)])
+    run(["done", "--mins", "5", "--solved"], capsys)
+    o = out(capsys)
+    assert "overridden by TESTS" in o
+    assert store.load()["logs"][-1]["solved"] is False
+
+
+def test_done_no_tests_falls_back_to_flags(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [])  # empty TESTS
+    run(["done", "--solved", "--mins", "9"], capsys)
+    s = store.load()
+    assert s["logs"][-1]["solved"] is True and s["logs"][-1]["tests"] is None
+
+
+def test_done_no_solution_file_falls_back_to_flags(env, capsys, no_fuzz):
+    open_session("contains-duplicate")  # never wrote a file
+    run(["done", "--fail", "--mins", "9"], capsys)
+    assert store.load()["logs"][-1]["solved"] is False
+
+
+def test_done_prompt_yes_and_no(env, capsys, no_fuzz, monkeypatch):
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [])
+    answers = iter(["y"])
+    monkeypatch.setattr(builtins, "input", lambda _: answers.__next__())
+    open_session("contains-duplicate")
+    run(["done", "--mins", "5"], capsys)
+    # (fake input() doesn't echo the prompt; _ask_solved is unit-tested below)
+    assert store.load()["logs"][-1]["solved"] is True
+
+    answers = iter(["n"])
+    monkeypatch.setattr(builtins, "input", lambda _: answers.__next__())
+    open_session("contains-duplicate")
+    run(["done", "--mins", "5"], capsys)
+    assert store.load()["logs"][-1]["solved"] is False
+
+
+def test_ask_solved_parses_answers(capsys, monkeypatch):
+    answers = iter(["x", "  Y ", "n"])  # junk ignored, whitespace+case-insensitive
+    monkeypatch.setattr(builtins, "input", lambda _: answers.__next__())
+    assert cli._ask_solved({"title": "Two Sum"}, 5.0) is True
+    assert "Two Sum — 5m elapsed." in out(capsys)
+    assert cli._ask_solved({"title": "Two Sum"}, 5.0) is False
+
+
+def test_done_prompt_eof_keeps_session(env, capsys, monkeypatch):
+    def boom(_):
+        raise EOFError
+    monkeypatch.setattr(builtins, "input", boom)
+    open_session("contains-duplicate")
+    assert run(["done", "--mins", "5"], capsys) == 1
+    assert "session kept" in out(capsys)
+    s = store.load()
+    assert s["session"] is not None and s["logs"] == []
+
+
+def test_done_broken_solution_file_is_unsolved(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "contains-duplicate.py").write_text("class Solution:\n  def broken(")
+    run(["done", "--mins", "5"], capsys)
+    o = out(capsys)
+    assert "fails to load" in o
+    assert store.load()["logs"][-1]["solved"] is False
+
+
+def test_done_rating_override(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    run(["done", "--mins", "8", "--rating", "2.5"], capsys)
+    assert store.load()["logs"][-1]["rating"] == 2.5
+
+
+def test_done_rating_out_of_range_keeps_session(env, capsys):
+    open_session("contains-duplicate")
+    assert run(["done", "--rating", "9"], capsys) == 1
+    assert store.load()["session"] is not None and store.load()["logs"] == []
+
+
+def test_done_requires_session(env, capsys):
+    assert run(["done", "--mins", "5"], capsys) == 1
+    assert "No active session" in out(capsys)
+
+
+def test_done_lock_hint_fires_once_on_transition(env, capsys, no_fuzz):
+    data, sol = env
+    s = store.load()
+    for e in (6.0, 7.0, 6.0, 7.0):  # four stable prior attempts
+        add_log(s, "contains-duplicate", e, solved=True)
+    store.save(s)
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    run(["done", "--mins", "6"], capsys)
+    assert "target locked at your demonstrated pace" in out(capsys)
+
+    open_session("contains-duplicate")  # next rep: already locked, no repeat hint
+    run(["done", "--mins", "6"], capsys)
+    assert "target locked at your demonstrated pace" not in out(capsys)
+
+
+# ---------------------------------------------------------------- check
+
+def test_check_defaults_to_subset_of_three(env, capsys):
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True)] * 5)
+    assert run(["check", "contains-duplicate"], capsys) is None
+    o = out(capsys)
+    assert "(3 of 5 case(s))" in o and "3/3 passed" in o
+
+
+def test_check_n_and_all_flags(env, capsys):
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True)] * 5)
+    run(["check", "contains-duplicate", "--n", "2"], capsys)
+    assert "(2 of 5 case(s))" in out(capsys)
+    run(["check", "contains-duplicate", "--all"], capsys)
+    assert "(5 of 5 case(s))" in out(capsys)
+
+
+def test_check_failure_exits_1(env, capsys):
+    data, sol = env
+    write_solution(sol, "contains-duplicate",
+                   "class Solution:\n    def containsDuplicate(self, nums):\n        return True",
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    assert run(["check", "contains-duplicate", "--all"], capsys) == 1
+    o = out(capsys)
+    assert "FAIL" in o and "want False" in o and "fix and re-run" in o
+
+
+def test_check_error_paths(env, capsys):
+    assert run(["check", "climbing-stairs"], capsys) == 1        # no file
+    data, sol = env
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "two-sum.py").write_text("x = 1\n")                   # no Solution
+    assert run(["check", "two-sum"], capsys) == 1
+    assert "define a `class Solution`" in out(capsys)
+    (sol / "valid-anagram.py").write_text("class Solution:\n    pass\n")  # no TESTS
+    assert run(["check", "valid-anagram"], capsys) == 1
+    assert "add TESTS" in out(capsys)
+    (sol / "reverse-linked-list.py").write_text("def broken(:\n")        # import error
+    assert run(["check", "reverse-linked-list"], capsys) == 1
+    assert "error loading" in out(capsys)
+
+
+def test_check_slug_resolution_order(env, capsys):
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    write_solution(sol, "valid-palindrome", "class Solution:\n    def isPalindrome(self, s):\n        return True",
+                   [(("a",), True)])
+    open_session("valid-palindrome")          # session wins over `last`
+    run(["check"], capsys)
+    assert "checking valid-palindrome" in out(capsys)
+    run(["check", "contains-duplicate"], capsys)  # explicit slug beats everything
+    assert "checking contains-duplicate" in out(capsys)
+    s = store.load()
+    s["session"] = None
+    s["last"] = "valid-palindrome"             # last-graded fallback
+    store.save(s)
+    run(["check"], capsys)
+    assert "checking valid-palindrome" in out(capsys)
+    s["last"] = None
+    store.save(s)
+    assert run(["check"], capsys) == 1         # nothing resolvable
+    assert "grade something first" in out(capsys)
+
+
+def test_check_exception_in_method_is_failure(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum",
+                   "class Solution:\n    def twoSum(self, nums, target):\n        raise ValueError('boom')",
+                   [(([2, 7], 9), [0, 1])])
+    assert run(["check", "two-sum"], capsys) == 1
+    assert "ValueError: boom" in out(capsys)
+
+
+def test_run_tests_uses_last_public_method_and_loose_lists(env, capsys):
+    data, sol = env
+    # helper defined ABOVE the required method; returns a tuple where a list is expected
+    write_solution(sol, "two-sum",
+                   "class Solution:\n"
+                   "    def _helper(self):\n        return 9\n\n"
+                   "    def twoSum(self, nums, target):\n        return (0, 1)",
+                   [(([2, 7, 11, 15], 9), [0, 1])])
+    assert run(["check", "two-sum"], capsys) is None
+    assert "1/1 passed" in out(capsys)
+
+
+# ---------------------------------------------------------------- skip
+
+def test_skip_guard_and_drop(env, capsys):
+    assert run(["skip"], capsys) == 1
+    assert "No active session" in out(capsys)
+    open_session("two-sum")
+    assert run(["skip"], capsys) is None
+    assert "dropped" in out(capsys)
+    s = store.load()
+    assert s["session"] is None and s["logs"] == []  # nothing graded, nothing logged
+
+
+# ---------------------------------------------------------------- status / topics / stats
+
+def test_status_fresh(env, capsys):
+    run(["status"], capsys)
+    o = out(capsys)
+    assert "0/150 seen" in o and "streak 0d" in o and "proven 0/150" in o
+    assert "interview readiness: 0%  (goal 80%)" in o
+    assert "least ready:" in o
+
+
+def test_status_after_activity(env, capsys, no_fuzz):
+    s = store.load()
+    seed_review_card(s, "contains-duplicate")
+    add_log(s, "contains-duplicate", 5.0, solved=True, when=now_utc())
+    store.save(s)
+    run(["status"], capsys)
+    o = out(capsys)
+    assert "1/150 seen" in o and "proven 1/150" in o and "streak 1d" in o
+    open_session("contains-duplicate")
+    run(["status"], capsys)
+    assert "in session: Contains Duplicate" in out(capsys)
+
+
+def test_topics_table(env, capsys):
+    run(["topics"], capsys)
+    o = out(capsys)
+    assert o.count("\n") >= 19          # 18 topics + header
+    assert "Arrays & Hashing" in o and "Bit Manipulation" in o
+    assert "overall: 0%  (goal 80%)" in o
+    assert "ready = you solved the problem last attempt" in o
+
+
+def test_stats_layout(env, capsys):
+    s = store.load()
+    add_log(s, "two-sum", 5, solved=True, when=local(0))
+    store.save(s)
+    run(["stats"], capsys)
+    o = out(capsys)
+    assert "streak: 1d current (best 1d)" in o
+    assert "solved: 1 attempts · 1 distinct problems · 1 proven" in o
+    assert "last 14 days" in o and "peak 1 attempts/day" in o
+    assert "trend" not in o            # hidden below 4 solved attempts
+
+
+def test_stats_shows_trends_when_enough_history(env, capsys):
+    s = store.load()
+    add_log(s, "two-sum", 60, solved=False, rating=1.0, when=local(9))
+    add_log(s, "two-sum", 60, solved=True, rating=2.0, when=local(9))
+    add_log(s, "two-sum", 8, solved=True, rating=3.5, when=local(1))
+    add_log(s, "two-sum", 8, solved=True, rating=3.6, when=local(0.5))
+    add_log(s, "two-sum", 8, solved=True, rating=3.6, when=local(0))
+    store.save(s)
+    run(["stats"], capsys)
+    o = out(capsys)
+    assert "trend (first half -> recent)" in o
+    assert "solve rate" in o and "of target time" in o
+
+
+# ---------------------------------------------------------------- config
+
+def test_config_show_and_set(env, capsys):
+    assert run(["config"], capsys) is None
+    o = out(capsys)
+    assert "daily_new = 5" in o and "retention_target = 0.9" in o
+    assert "auto_web = False" in o
+
+    run(["config", "daily_new=3"], capsys)
+    assert store.load()["config"]["daily_new"] == 3
+
+    run(["config", "auto_edit=true"], capsys)
+    assert store.load()["config"]["auto_edit"] is True
+
+    run(["config", "auto_edit=false"], capsys)
+    assert store.load()["config"]["auto_edit"] is False  # real bool, not "false"
+
+    run(["config", "retention_target=0.85"], capsys)
+    assert store.load()["config"]["retention_target"] == 0.85
+
+    assert run(["config", "bogus=1"], capsys) == 1
+    assert "Unknown config key" in out(capsys)
+
+    # type validation: a bad value must be rejected, never poison the state
+    assert run(["config", "daily_new=abc"], capsys) == 1
+    assert store.load()["config"]["daily_new"] == 3  # previous value untouched
+    assert run(["config", "auto_edit=maybe"], capsys) == 1
+    assert "must be true or false" in out(capsys)
+
+
+# ---------------------------------------------------------------- entry
+
+def test_bare_grind_defaults_to_next(env, capsys):
+    assert run([], capsys) is None
+    assert "https://leetcode.com/problems/contains-duplicate/" in out(capsys)
+
+
+def test_done_struggle_message_for_slow_solve(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    run(["done", "--mins", "60"], capsys)  # 60 vs target 15 -> r=4, rating floors
+    o = out(capsys)
+    assert "solved in 1h00m" in o and "rating 2.20/4" in o  # solve floor engaged
+    assert "solved, but a struggle" in o
+
+
+
+def test_first_run_intro_shown_once(env, capsys):
+    run(["next"], capsys)
+    o = out(capsys)
+    assert "Welcome to grind" in o
+    assert "grind done" in o and "grind check" in o  # the loop is taught
+    assert "solve it in your IDE" in o                # per-presentation hint
+    assert store.load()["seen_intro"] is True
+
+    s = store.load()
+    s["session"] = None
+    store.save(s)
+    run(["next"], capsys)
+    o2 = out(capsys)
+    assert "Welcome to grind" not in o2  # never nagging
+    assert "solve it in your IDE" in o2  # hint stays
+
+def test_check_no_public_method_exits_cleanly(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum", "class Solution:\n    def _hidden(self):\n        pass",
+                   [(([2, 7], 9), [0, 1])])
+    assert run(["check", "two-sum"], capsys) == 1
+    assert "no public method found in Solution" in out(capsys)
+
+
+def test_done_no_public_method_gate_is_unsolved(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("two-sum")
+    write_solution(sol, "two-sum", "class Solution:\n    def _hidden(self):\n        pass",
+                   [(([2, 7], 9), [0, 1])])
+    run(["done", "--mins", "5"], capsys)
+    assert "no public method found" in out(capsys)
+    assert store.load()["logs"][-1]["solved"] is False  # graded, no traceback
+
+
+def test_python_dash_m_entry_point(env, capsys):
+    """`python -m grind` must work like the console script."""
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, "-m", "grind", "status"],
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0
+    assert "grind status" in r.stdout
+    assert "interview readiness" in r.stdout
