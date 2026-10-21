@@ -28,10 +28,12 @@ def state_path() -> Path:
 def load() -> dict:
     p = state_path()
     if not p.exists():
-        return {"config": dict(DEFAULT_CONFIG), "cards": {}, "logs": [], "session": None}
+        return {"config": dict(DEFAULT_CONFIG), "cards": {}, "logs": [], "session": None,
+                "graded_files": {}}
     s = json.loads(p.read_text())
     s["config"] = {**DEFAULT_CONFIG, **s.get("config", {})}
     s.setdefault("cards", {}), s.setdefault("logs", []), s.setdefault("session", None)
+    s.setdefault("graded_files", {})   # slugs whose on-disk file is a graded attempt
     return s
 
 

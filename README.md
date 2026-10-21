@@ -100,6 +100,8 @@ plumbing:
   problem's examples** — including operation sequences for design problems
   (`MinStack`, `LRUCache`, …) and the "any valid answer" checks (any-order
   subsets, any legal N-Queens board, float tolerance).
+- `solutions/archive/<slug>/attempt-1.py, -2, …` — every previous rep's
+  solution, filed away automatically so reviews always start from a blank file.
 
 You write the body; `grind check`/`grind done` convert the printed values
 (`[1,2,3]` arrays) into linked lists/trees/graph nodes automatically and
@@ -112,6 +114,16 @@ resurfacing within minutes — fix it and `grind next` brings it straight back.
 With no TESTS defined, `done` falls back to asking whether you solved it.
 `grind check` is the lightweight loop while solving — just a few cases to
 catch silly mistakes early.
+
+Reviews are recall tests, so when a problem resurfaces, its previous solution
+moves itself to `solutions/archive/<slug>/` (kept forever, backed up like
+everything else) and the scaffold resets to blank — you never re-solve on top
+of your old code. Solutions you wrote **before** using grind get the same
+treatment: if the file on disk passes its own full `TESTS` suite, it's a
+finished solution — grind archives it the first time it picks that problem
+and starts you from a blank file. Work in progress is never reset: a file
+that fails its tests (or has none) stays exactly as it is, so `grind skip`
+and a later `grind next` pick up where you left off.
 
 Set-and-forget: `grind config auto_edit=true` makes every `grind next` open
 the scaffold in `$EDITOR` (`auto_web=true` likewise opens the problem page),

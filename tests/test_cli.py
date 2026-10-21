@@ -1,10 +1,14 @@
 """grind.cli — every command, every branch, through the real entry point."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 import builtins
 import sys
 
 import pytest
+
+from fsrs import Card
 
 from grind import cli
 from grind import scheduler as sch
@@ -267,6 +271,117 @@ def test_done_lock_hint_fires_once_on_transition(env, capsys, no_fuzz):
     open_session("contains-duplicate")  # next rep: already locked, no repeat hint
     run(["done", "--mins", "6"], capsys)
     assert "target locked at your demonstrated pace" not in out(capsys)
+
+# ---------------------------------------------------------------- review reset
+
+TWO_SUM_BODY = "class Solution:\n    def twoSum(self, nums, target):\n        return [0, 1]"
+
+
+def _due_review(slug: str, graded: bool = False) -> None:
+    """Seed a due-now review card; graded=True flags its file as a done attempt."""
+    s = store.load()
+    seed_review_card(s, slug)
+    c = Card.from_dict(s["cards"][slug])
+    c.due = now_utc() - timedelta(hours=1)
+    s["cards"][slug] = c.to_dict()
+    if graded:
+        s["graded_files"][slug] = True
+    store.save(s)
+
+
+def test_next_review_archives_graded_attempt(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum", TWO_SUM_BODY, [(([2, 7, 11, 15], 9), [0, 1])])
+    _due_review("two-sum", graded=True)
+    run(["next"], capsys)
+    o = out(capsys)
+    arch = sol / "archive" / "two-sum" / "attempt-1.py"
+    assert "return [0, 1]" in arch.read_text()                  # old solution kept verbatim
+    fresh = (sol / "two-sum.py").read_text()
+    assert "return [0, 1]" not in fresh and "pass" in fresh     # scaffold is blank again
+    assert "attempt-1.py" in o and "solve from memory" in o
+    assert "two-sum" not in store.load()["graded_files"]        # flag consumed
+
+
+def test_next_review_numbers_attempts(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum", TWO_SUM_BODY, [(([2, 7, 11, 15], 9), [0, 1])])
+    _due_review("two-sum", graded=True)
+    arch = sol / "archive" / "two-sum"
+    arch.mkdir(parents=True)
+    (arch / "attempt-1.py").write_text("# earlier rep\n")
+    run(["next"], capsys)
+    assert (arch / "attempt-2.py").exists()
+
+
+def test_next_review_keeps_ungraded_work(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum", "# HALF-DONE WORK", [])
+    _due_review("two-sum", graded=False)
+    run(["next"], capsys)
+    assert "HALF-DONE" in (sol / "two-sum.py").read_text()
+    assert not (sol / "archive").exists()
+
+
+def test_done_marks_file_as_graded(env, capsys, no_fuzz):
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [(([1, 2, 3, 1],), True)])
+    open_session("contains-duplicate")
+    run(["done", "--mins", "5"], capsys)
+    assert store.load()["graded_files"]["contains-duplicate"] is True
+
+
+def test_done_without_solution_file_not_marked(env, capsys, no_fuzz):
+    open_session("contains-duplicate")             # no file was ever written
+    run(["done", "--fail", "--mins", "5"], capsys)
+    assert "contains-duplicate" not in store.load()["graded_files"]
+
+# ------------------------------------------------------- existing solutions
+
+def test_next_adopts_passing_solution_on_disk(env, capsys):
+    """A pre-grind file that passes its own TESTS is a finished solution —
+    archive it, don't let it spoil the rep."""
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["next"], capsys)                     # fresh state -> new problem pick
+    o = out(capsys)
+    arch = sol / "archive" / "contains-duplicate" / "attempt-1.py"
+    assert "len(set(nums))" in arch.read_text()
+    fresh = (sol / "contains-duplicate.py").read_text()
+    assert "len(set(nums))" not in fresh and "pass" in fresh
+    assert "attempt-1.py" in o and "solve from memory" in o
+
+
+def test_next_keeps_failing_file_on_disk(env, capsys):
+    """WIP / buggy files never pass their TESTS -> left exactly as-is."""
+    data, sol = env
+    write_solution(sol, "contains-duplicate",
+                   "class Solution:\n    def containsDuplicate(self, nums):\n        return True  # buggy WIP",
+                   [(([1, 2, 3, 4],), False)])
+    run(["next"], capsys)
+    assert "buggy WIP" in (sol / "contains-duplicate.py").read_text()
+    assert not (sol / "archive").exists()
+
+
+def test_next_keeps_file_without_tests_on_disk(env, capsys):
+    """No TESTS = nothing to judge by -> file stays (can't verify, don't touch)."""
+    data, sol = env
+    write_solution(sol, "contains-duplicate", SOLVED_BODY, [])
+    run(["next"], capsys)
+    assert "len(set(nums))" in (sol / "contains-duplicate.py").read_text()
+    assert not (sol / "archive").exists()
+
+
+def test_next_review_adopts_passing_solution_without_flag(env, capsys):
+    """Flag lost (state wiped, files restored): the TESTS still judge a due review."""
+    data, sol = env
+    write_solution(sol, "two-sum", TWO_SUM_BODY, [(([2, 7, 11, 15], 9), [0, 1])])
+    _due_review("two-sum", graded=False)
+    run(["next"], capsys)
+    assert "return [0, 1]" in (sol / "archive" / "two-sum" / "attempt-1.py").read_text()
+    assert "pass" in (sol / "two-sum.py").read_text()
+    assert "two-sum" not in store.load()["graded_files"]
 
 
 # ---------------------------------------------------------------- check

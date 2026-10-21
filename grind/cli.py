@@ -6,12 +6,14 @@ Loop:  grind next   -> presents the best problem, writes a scaffold, starts time
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import shutil
 import subprocess
 import sys
 import types
 import webbrowser
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -66,6 +68,33 @@ def _legacy_scaffold(prob: dict, target: float, phase: str) -> str:
     )
 
 
+def _archive_solution(sol_dir: Path, slug: str, scaffold: Path) -> Path:
+    """Move a finished rep's solution out of the way — full history stays on
+    disk (and in every backup): solutions/archive/<slug>/attempt-N.py."""
+    arch = sol_dir / "archive" / slug
+    arch.mkdir(parents=True, exist_ok=True)
+    n = 1 + sum(1 for _ in arch.glob("attempt-*.py"))
+    dest = arch / f"attempt-{n}.py"
+    shutil.move(str(scaffold), str(dest))
+    return dest
+
+
+def _file_passes_tests(scaffold: Path, slug: str) -> bool:
+    """The file on disk is a complete working solution: it loads and passes
+    its own full TESTS suite. Blank scaffolds, WIP, and files without tests
+    fail this check and are never touched."""
+    try:
+        mod = _load_solution(scaffold)
+        tests = getattr(mod, "TESTS", None)
+        if not tests:
+            return False
+        with redirect_stdout(io.StringIO()):
+            passed, total = problems.run_tests(mod, tests, slug)
+        return total > 0 and passed == total
+    except Exception:
+        return False
+
+
 def start_session(state: dict, prob: dict, why: str) -> None:
     now = sch.utcnow()
     sol_dir = Path(os.environ.get("GRIND_SOLUTIONS", "solutions"))
@@ -73,6 +102,21 @@ def start_session(state: dict, prob: dict, why: str) -> None:
     scaffold = sol_dir / f"{prob['slug']}.py"
     target, phase = sch.target_info(state, prob)
     entry = problems.get(prob["slug"])
+    archived = None
+    if scaffold.exists():
+        if why == "review" and state["graded_files"].pop(prob["slug"], None):
+            # SRS resurfacing: the file still holds the previous rep's solution.
+            # Recall is the point — keep the old attempt in archive/ and start
+            # this rep from a blank scaffold. Ungraded work (a skip, mid-solve
+            # edits) has no flag and is never touched.
+            archived = _archive_solution(sol_dir, prob["slug"], scaffold)
+        elif _file_passes_tests(scaffold, prob["slug"]):
+            # A working solution is already on disk — a file from before grind,
+            # or an attempt finished but never graded. Its own TESTS are the
+            # judge: passing means archived + blank scaffold (prove you can
+            # still produce it); anything blank, half-done, or without tests
+            # stays exactly where it is.
+            archived = _archive_solution(sol_dir, prob["slug"], scaffold)
     if not scaffold.exists():
         scaffold.write_text(problems.render_py(prob, entry, target, phase) if entry
                             else _legacy_scaffold(prob, target, phase))
@@ -89,6 +133,8 @@ def start_session(state: dict, prob: dict, why: str) -> None:
     env = f"statement: {md}" if entry else ""
     print(f"  scaffold: {scaffold}   (target {_fmt_min(target)} · {phase})" +
           (f"   ·   {env}" if env else ""))
+    if archived:
+        print(f"  prior attempt → {archived}   ·   fresh scaffold — solve from memory")
     print("  solve it in your IDE, verify with `grind check`, then grade with `grind done`")
 
 
@@ -173,6 +219,8 @@ def cmd_done(args) -> None:
     state["logs"].append({"slug": sess["slug"], "rating": round(rating_f, 2), "solved": solved,
                           "elapsed": round(elapsed, 1), "new": was_new, "ts": now.isoformat(),
                           "tests": f"{passed}/{total}" if total else None})
+    if sol_path.exists():
+        state["graded_files"][sess["slug"]] = True   # next rep starts from a blank scaffold
     state["session"] = None
     state["last"] = sess["slug"]
     store.save(state)

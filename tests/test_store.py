@@ -7,8 +7,9 @@ from grind import store
 
 
 def test_load_fresh_returns_complete_defaults(state):
-    assert set(state) == {"config", "cards", "logs", "session"}
+    assert set(state) == {"config", "cards", "logs", "session", "graded_files"}
     assert state["cards"] == {} and state["logs"] == [] and state["session"] is None
+    assert state["graded_files"] == {}
     cfg = state["config"]
     assert cfg["daily_new"] == 5
     assert cfg["targets"] == {"Easy": 15, "Medium": 30, "Hard": 45}
