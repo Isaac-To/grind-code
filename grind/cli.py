@@ -228,6 +228,31 @@ def cmd_next(args) -> None:
         subprocess.call([os.environ.get("EDITOR", "vi"), state["session"]["scaffold"]])
 
 
+def cmd_help(args) -> None:
+    """Print a friendly command overview grouped by purpose."""
+    print("grind — FSRS-driven LeetCode fluency trainer")
+    print()
+    print("Daily loop:")
+    print("  grind next      present the best problem, write scaffold, start timer")
+    print("  grind check     quick test (first 3 cases) while you solve")
+    print("  grind done      run full suite, grade on outcome + time, schedule rep")
+    print("  grind skip      drop session without grading (work kept in archive/)")
+    print()
+    print("Inspect & learn:")
+    print("  grind status    one-line progress snapshot (readiness, streak, due)")
+    print("  grind topics    per-topic readiness breakdown")
+    print("  grind stats     streaks, solved counts, trends, activity")
+    print("  grind reference print the verified reference solution for a problem")
+    print("  grind extras    print the hand-written edge cases for a problem")
+    print()
+    print("Config & maintenance:")
+    print("  grind config    show or set config (e.g. daily_new=3)")
+    print("  grind backup    back up now (auto after every grind done)")
+    print("  grind restore   pull backup onto a new machine")
+    print("  grind update    pull latest version and reinstall")
+    print()
+    print("Run `grind <command> --help` for options on any command.")
+    print("Run `grind` with no args → same as `grind next`.")
 def cmd_done(args) -> None:
     state = store.load()
     sess = state["session"]
@@ -707,6 +732,8 @@ def main(argv=None) -> None:
     p.add_argument("--web", action="store_true", help="open the problem in your browser")
     p.add_argument("--edit", action="store_true", help="open the scaffold in $EDITOR")
     p.set_defaults(fn=cmd_next)
+    p = sub.add_parser("help", help="show this friendly command overview")
+    p.set_defaults(fn=cmd_help)
     p = sub.add_parser("done", help="stop timer, grade, schedule next rep")
     p.add_argument("--solved", action="store_true", default=None, help="you solved it (skips prompt)")
     p.add_argument("--fail", dest="solved", action="store_false", default=None, help="you did not solve it")
