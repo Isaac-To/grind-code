@@ -1,0 +1,32 @@
+{
+  "valid-parentheses": [
+    {"args": ["("], "want": false},
+    {"args": ["]"], "want": false},
+    {"args": ["{[()()]}"], "want": true}
+  ],
+  "min-stack": [
+    {"ops": ["MinStack", "push", "push", "getMin", "pop", "getMin", "push", "getMin", "pop", "top", "getMin"], "args": [[], [5], [5], [], [], [], [-1], [], [], [], []], "want": [null, null, null, 5, null, 5, null, -1, null, 5, 5]}
+  ],
+  "evaluate-reverse-polish-notation": [
+    {"args": [["42"]], "want": 42},
+    {"args": [["7", "-3", "/"]], "want": -2},
+    {"args": [["3", "7", "-"]], "want": -4}
+  ],
+  "daily-temperatures": [
+    {"args": [[50]], "want": [0]},
+    {"args": [[70, 70, 70]], "want": [0, 0, 0]},
+    {"args": [[73, 73, 74]], "want": [2, 1, 0]},
+    {"args": [[100, 90, 80]], "want": [0, 0, 0]}
+  ],
+  "car-fleet": [
+    {"args": [12, [6, 0], [3, 6]], "want": 1},
+    {"args": [10, [0, 4], [1, 4]], "want": 2},
+    {"args": [10, [0, 5, 3], [5, 2, 1]], "want": 2}
+  ],
+  "largest-rectangle-in-histogram": [
+    {"args": [[5]], "want": 5},
+    {"args": [[0, 0]], "want": 0},
+    {"args": [[1, 2, 3, 4, 5]], "want": 9},
+    {"args": [[2, 2, 2]], "want": 6}
+  ]
+}

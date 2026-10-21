@@ -38,6 +38,12 @@ full-test-suite gate, and backs everything up invisibly.
 - `grind/bank.json` / `problems.json` — static problem data (offline, never fetched).
 - `docs/BEHAVIOR.md` — the spec. `README.md` — user-facing doc.
 - `scripts/` — data pipeline for the problem bank; not part of the runtime.
+  Edge cases live in `scripts/extras/*.json`, computed from (and verified
+  against) the heavily commented reference solutions in
+  `scripts/references/` — `scripts/edge_tool.py` authors/verifies one
+  problem, `scripts/verify_extras.py` gates the whole bank, and
+  `build_problems.py` merges the extras after each problem's bundled
+  examples. Rebuild + re-gate both after touching any of them.
 
 ## Conventions
 

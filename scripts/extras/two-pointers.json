@@ -1,0 +1,28 @@
+{
+  "valid-palindrome": [
+    {"args": ["0P"], "want": false},
+    {"args": ["a."], "want": true},
+    {"args": ["Aa"], "want": true}
+  ],
+  "two-sum-ii-input-array-is-sorted": [
+    {"args": [[5, 25, 75], 100], "want": [2, 3]},
+    {"args": [[-5, -3, 2, 4], -1], "want": [1, 4]},
+    {"args": [[1, 2, 3, 4, 4, 9, 11], 8], "want": [4, 5]}
+  ],
+  "3sum": [
+    {"args": [[-2, 0, 1, 1, 2]], "want": [[-2, 0, 2], [-2, 1, 1]]},
+    {"args": [[-1, 0, 1, 0, -1]], "want": [[-1, 0, 1]]},
+    {"args": [[-2, 1, 1]], "want": [[-2, 1, 1]]}
+  ],
+  "container-with-most-water": [
+    {"args": [[4, 3, 2, 1, 4]], "want": 16},
+    {"args": [[1, 2, 1]], "want": 2},
+    {"args": [[2, 2, 2]], "want": 4}
+  ],
+  "trapping-rain-water": [
+    {"args": [[3]], "want": 0},
+    {"args": [[2, 0, 2]], "want": 2},
+    {"args": [[1, 2, 3, 4]], "want": 0},
+    {"args": [[5, 4, 1, 2]], "want": 1}
+  ]
+}

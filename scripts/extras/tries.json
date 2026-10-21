@@ -1,0 +1,40 @@
+{
+  "implement-trie-prefix-tree": [
+    {
+      "ops": ["Trie", "insert", "startsWith", "search", "insert", "search", "search", "startsWith", "insert", "search", "startsWith"],
+      "args": [[], ["a"], ["a"], ["a"], ["ab"], ["ab"], ["a"], ["abc"], ["a"], ["a"], ["ab"]],
+      "want": [null, null, true, true, null, true, true, false, null, true, true]
+    },
+    {
+      "ops": ["Trie", "search", "startsWith", "insert", "search", "startsWith", "startsWith"],
+      "args": [[], ["z"], ["z"], ["zzzz"], ["zzzz"], ["z"], ["zzz"]],
+      "want": [null, false, false, null, true, true, true]
+    }
+  ],
+  "design-add-and-search-words-data-structure": [
+    {
+      "ops": ["WordDictionary", "addWord", "search", "search", "search", "addWord", "search", "search", "search", "search"],
+      "args": [[], ["a"], ["a"], ["b"], ["."], ["abc"], ["..c"], ["a.c"], ["..."], ["...."]],
+      "want": [null, null, true, false, true, null, true, true, true, false]
+    },
+    {
+      "ops": ["WordDictionary", "search", "search", "addWord", "search", "search", "addWord", "search"],
+      "args": [[], ["."], ["..."], ["x"], ["x"], ["."], ["xyz"], [".yz"]],
+      "want": [null, false, false, null, true, true, null, true]
+    }
+  ],
+  "word-search-ii": [
+    {
+      "args": [[["a"]], ["a"]],
+      "want": ["a"]
+    },
+    {
+      "args": [[["a", "a"], ["a", "a"]], ["aaa", "aaaa", "aa"]],
+      "want": ["aa", "aaa", "aaaa"]
+    },
+    {
+      "args": [[["a", "b", "c"]], ["cba", "abc", "abd"]],
+      "want": ["abc", "cba"]
+    }
+  ]
+}

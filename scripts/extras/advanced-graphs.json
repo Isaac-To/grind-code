@@ -1,0 +1,35 @@
+{
+  "network-delay-time": [
+    {"args": [[[1, 2, 0]], 2, 1], "want": 0},
+    {"args": [[[1, 2, 1]], 3, 1], "want": -1},
+    {"args": [[[1, 2, 10], [1, 3, 1], [3, 2, 1]], 3, 1], "want": 2},
+    {"args": [[[1, 2, 1], [2, 3, 2], [1, 3, 5]], 3, 1], "want": 3}
+  ],
+  "reconstruct-itinerary": [
+    {"args": [[["JFK", "ATL"]]], "want": ["JFK", "ATL"]},
+    {"args": [[["JFK", "KUL"], ["JFK", "NRT"], ["NRT", "JFK"]]], "want": ["JFK", "NRT", "JFK", "KUL"]},
+    {"args": [[["JFK", "AAA"], ["AAA", "JFK"], ["JFK", "BBB"], ["BBB", "JFK"]]], "want": ["JFK", "AAA", "JFK", "BBB", "JFK"]}
+  ],
+  "min-cost-to-connect-all-points": [
+    {"args": [[[0, 0]]], "want": 0},
+    {"args": [[[0, 0], [5, 5]]], "want": 10},
+    {"args": [[[0, 0], [0, 3], [0, 7]]], "want": 7}
+  ],
+  "swim-in-rising-water": [
+    {"args": [[[0]]], "want": 0},
+    {"args": [[[10, 15], [5, 20]]], "want": 20},
+    {"args": [[[0, 3, 5], [1, 4, 6], [2, 7, 8]]], "want": 8}
+  ],
+  "alien-dictionary": [
+    {"args": [["ab", "a"]], "want": ""},
+    {"args": [["abc", "abd", "ab"]], "want": ""},
+    {"args": [["ba", "ab"]], "want": "ba"},
+    {"args": [["ab", "bc", "cd", "da"]], "want": "abcd"}
+  ],
+  "cheapest-flights-within-k-stops": [
+    {"args": [2, [], 0, 1, 0], "want": -1},
+    {"args": [3, [[0, 1, 50]], 0, 2, 2], "want": -1},
+    {"args": [4, [[0, 1, 10], [1, 2, 10], [2, 3, 10], [0, 3, 100]], 0, 3, 1], "want": 100},
+    {"args": [4, [[0, 1, 10], [1, 2, 10], [2, 3, 10], [0, 3, 100]], 0, 3, 2], "want": 30}
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "maximum-subarray": [
+    {"args": [[-3, -1, -2]], "want": -1},
+    {"args": [[-5]], "want": -5},
+    {"args": [[2, -1, 2]], "want": 3}
+  ],
+  "jump-game": [
+    {"args": [[0]], "want": true},
+    {"args": [[0, 2]], "want": false},
+    {"args": [[1, 0, 1]], "want": false}
+  ],
+  "jump-game-ii": [
+    {"args": [[0]], "want": 0},
+    {"args": [[1, 1]], "want": 1},
+    {"args": [[2, 1, 1]], "want": 1}
+  ],
+  "gas-station": [
+    {"args": [[5], [4]], "want": 0},
+    {"args": [[3], [3]], "want": 0},
+    {"args": [[2, 4], [3, 4]], "want": -1}
+  ],
+  "hand-of-straights": [
+    {"args": [[1], 1], "want": true},
+    {"args": [[2, 2], 2], "want": false},
+    {"args": [[1, 1, 2, 3], 2], "want": false}
+  ],
+  "merge-triplets-to-form-target-triplet": [
+    {"args": [[[1, 2, 3]], [1, 2, 3]], "want": true},
+    {"args": [[[1, 5, 4], [2, 3, 2]], [2, 5, 3]], "want": false},
+    {"args": [[[1, 1, 1]], [1, 1, 2]], "want": false}
+  ],
+  "partition-labels": [
+    {"args": ["a"], "want": [1]},
+    {"args": ["abac"], "want": [3, 1]},
+    {"args": ["abc"], "want": [1, 1, 1]}
+  ],
+  "valid-parenthesis-string": [
+    {"args": ["*"], "want": true},
+    {"args": [")"], "want": false},
+    {"args": ["(((*)"], "want": false},
+    {"args": ["**"], "want": true}
+  ]
+}

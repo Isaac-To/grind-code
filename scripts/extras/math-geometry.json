@@ -1,0 +1,43 @@
+{
+  "rotate-image": [
+    {"args": [[[1]]], "want": [[1]]},
+    {"args": [[[1, 2], [3, 4]]], "want": [[3, 1], [4, 2]]},
+    {"args": [[[0, -1], [-2, 3]]], "want": [[-2, 0], [3, -1]]}
+  ],
+  "spiral-matrix": [
+    {"args": [[[7]]], "want": [7]},
+    {"args": [[[1], [2], [3]]], "want": [1, 2, 3]},
+    {"args": [[[1, 2], [3, 4]]], "want": [1, 2, 4, 3]}
+  ],
+  "set-matrix-zeroes": [
+    {"args": [[[5]]], "want": [[5]]},
+    {"args": [[[0]]], "want": [[0]]},
+    {"args": [[[1, 2], [3, 4]]], "want": [[1, 2], [3, 4]]},
+    {"args": [[[0, 1], [2, 3]]], "want": [[0, 0], [0, 3]]}
+  ],
+  "happy-number": [
+    {"args": [7], "want": true},
+    {"args": [4], "want": false},
+    {"args": [100], "want": true}
+  ],
+  "plus-one": [
+    {"args": [[0]], "want": [1]},
+    {"args": [[9, 9, 9]], "want": [1, 0, 0, 0]},
+    {"args": [[8, 9, 9, 9]], "want": [9, 0, 0, 0]}
+  ],
+  "powx-n": [
+    {"args": [5.0, 0], "want": 1.0},
+    {"args": [-2.0, 3], "want": -8.0},
+    {"args": [2.0, -3], "want": 0.125}
+  ],
+  "multiply-strings": [
+    {"args": ["0", "52"], "want": "0"},
+    {"args": ["999", "999"], "want": "998001"},
+    {"args": ["0", "0"], "want": "0"}
+  ],
+  "detect-squares": [
+    {"ops": ["DetectSquares", "count", "add", "add", "add", "count", "count", "add", "count"],
+     "args": [[], [[1, 1]], [[0, 0]], [[2, 2]], [[0, 2]], [[2, 0]], [[1, 1]], [[0, 0]], [[2, 0]]],
+     "want": [null, 0, null, null, null, 1, 0, null, 2]}
+  ]
+}

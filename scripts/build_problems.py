@@ -358,6 +358,9 @@ CURATED: dict[str, dict] = {
     # node identity quirks
     "lowest-common-ancestor-of-a-binary-search-tree": {"node_out_value": True},
     "clone-graph":                   {"graph": True, "alias": {"node": "adjList"}},
+    # cycle problems: tests carry LeetCode's pos as a trailing int arg — the
+    # runner attaches the cycle after converting the list
+    "linked-list-cycle":               {"cycle": True},
 }
 
 # Round-trip checks the examples can't express: the published example is
@@ -372,6 +375,18 @@ TEST_OVERRIDES: dict[str, dict] = {
             {"ops": ["Codec", "serialize", "deserialize"],
              "args": [[], [[]], ["@prev"]],
              "want": [None, None, []]},
+        ],
+    },
+
+    # hasCycle's published examples, re-encoded with LeetCode's pos (the
+    # printed list alone can't express the cycle; -1 = no cycle). The build
+    # appends pos as the trailing positional arg after the params reorder.
+    "linked-list-cycle": {
+        "mode": "call",
+        "tests": [
+            {"args": {"head": [3, 2, 0, -4]}, "pos": 1, "want": True},
+            {"args": {"head": [1, 2]}, "pos": 0, "want": True},
+            {"args": {"head": [1]}, "pos": -1, "want": False},
         ],
     },
 }
@@ -420,6 +435,10 @@ def main() -> None:
                     break
                 fixed.append(t)
             tests = fixed
+            if CURATED.get(slug, {}).get("cycle"):
+                # cycle problems: pos rides as a trailing positional arg
+                for t in tests:
+                    t["args"] = t["args"] + [t.pop("pos")]
         if not tests:
             problems.append((slug, "NO TESTS PARSED"))
             continue
@@ -429,7 +448,18 @@ def main() -> None:
         out[slug] = entry
         problems.append((slug, f"ok {mode} x{len(tests)}"
                         + (" SEM:" + ",".join(entry["sem"]) if entry["sem"] else "")))
+    # Hand-written edge cases (scripts/extras/*.json), verified against the
+    # reference solutions in scripts/references/ via scripts/edge_tool.py.
+    # Appended after the bundled examples so `grind check`'s first-3 subset
+    # stays the published examples.
+    extras_n = 0
+    for f in sorted((HERE / "extras").glob("*.json")):
+        for slug, cases in json.loads(f.read_text()).items():
+            if slug in out:
+                out[slug]["tests"] += cases
+                extras_n += len(cases)
     OUT.write_text(json.dumps(out, indent=1))
+    print(f"edge cases merged: {extras_n}")
     bad = [(s, w) for s, w in problems if not w.startswith("ok")]
     for s, w in problems:
         print(f"{w:24} {s}")

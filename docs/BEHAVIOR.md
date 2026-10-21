@@ -32,7 +32,7 @@ bank slug:
 | `python` | the real LeetCode python3 starter code, normalized to valid Python |
 | `method` | the required method name for single-call problems |
 | `mode` | `call` (one method call) or `ops` (design problems: constructor + operation sequence) |
-| `tests` | pre-parsed examples — see §6.1 |
+| `tests` | pre-parsed examples + hand-written edge cases — see §6.1 |
 | `sem` | comparison semantics the examples can't express — see §6.3 |
 
 ### State — `$GRIND_DATA_DIR/state.json` (default `~/.grind-code/state.json`)
@@ -67,8 +67,11 @@ is done with, its files are *filed* into `archive/<slug>/` and re-created
   (LeetCode ships these commented-out — grind emits real ones); the real
   LeetCode starter class and signature (e.g. `def twoSum(self, nums, target)`,
   design classes keep their names: `MinStack`, `LRUCache`, `Codec`); and
-  `TESTS` **pre-filled from the problem's published examples** — nothing to
-  copy from the web.
+  `TESTS` **pre-filled from the problem's published examples plus hand-written
+  edge cases** — nothing to copy from the web. Edge cases (2–4 per problem:
+  empty inputs, single elements, boundaries, extremes) are bundled offline in
+  `scripts/extras/*.json` and verified against reference solutions in
+  `scripts/references/` via `scripts/edge_tool.py` before entering the bank.
 - A problem with no bundled environment data (none today) falls back to the
   minimal scaffold: header docstring, `class Solution` with a `def solve(self)`
   stub, and an empty `TESTS` template to fill by hand.
@@ -303,8 +306,10 @@ interval fuzzing on.
 
 ### 6.1 File contract — `TESTS`
 `solutions/<slug>.py` defines the solution class and a module-level `TESTS`
-list. `grind next` pre-fills it from the problem's published examples; the
-user can edit it freely. Two entry shapes:
+list. `grind next` pre-fills it from the problem's published examples plus
+bundled hand-written edge cases (examples first — `grind check`'s first-3
+subset stays the official examples); the user can edit it freely. Two entry
+shapes:
 
 - **call mode** — `((arg, ...), expected)`: one method call. Arguments are the
   values LeetCode prints (arrays for lists/trees/graphs, scalars otherwise).
@@ -322,13 +327,14 @@ user can edit it freely. Two entry shapes:
 - **Method**: the dataset's recorded method name when the class defines it;
   else the **last public method** (`_`-prefixed ignored) — the scaffold's
   convention: helpers go above the required method. None → error.
-- **Values**: guided by the method's type annotations — `ListNode` args
-  become linked lists built from arrays, `TreeNode` args become trees
-  (level-order with `None` holes), random-pointer `Node` args become
-  `[[val, random_index], ...]` lists, and the results convert back to the
-  arrays LeetCode prints. Graph problems (`clone-graph`) get adjacency-list
-  conversion via the module's own node classes. Un-annotated methods: values
-  pass through as-is.
+- **Values**: guided by the method's type annotations — a `ListNode` arg
+  becomes a linked list built from an array, `TreeNode` a tree (level-order
+  with `None` holes), random-pointer `Node` a `[[val, random_index], ...]`
+  list; the results convert back to the arrays LeetCode prints. A composite
+  annotation like `list[ListNode | None]` (merge-k-sorted-lists) converts
+  each *element* to a node chain, leaving the outer list intact. Graph
+  problems (`clone-graph`) get adjacency-list conversion via the module's
+  own node classes. Un-annotated methods: values pass through as-is.
 - The solution file is compiled directly from source (`__pycache__` is never
   consulted — a same-size edit in the same second can't serve stale code).
 
@@ -345,6 +351,10 @@ user can edit it freely. Two entry shapes:
   - `nqueens` / `palindromic_substring` — any *valid* answer passes (a legal
     board, a palindromic substring of the input with the expected length).
   - `nocheck: [methods]` — ops whose results aren't asserted (randomized).
+  - `cycle` — the test carries LeetCode's `pos` as a trailing int arg
+    (`linked-list-cycle`); the runner attaches the tail back to node `pos`
+    after conversion (`-1` = no cycle; the scaffold carries a comment
+    explaining the encoding).
 
 ### 6.4 Output & effects
 One line per case (`[i/n] ok|FAIL` with args/ops detail), `passed/total`

@@ -115,8 +115,9 @@ def render_md(prob: dict, entry: dict, target: float, phase: str) -> str:
             f"[problem on LeetCode](https://leetcode.com/problems/{prob['slug']}/)\n"
             f"Fluency target: {target:g} min ({phase})\n\n---\n\n"
             f"{entry['markdown'].strip()}\n\n---\n\n"
-            "*The examples above are pre-loaded into `TESTS` in the solution file —\n"
-            "`grind check` runs a few, `grind done` runs all of them and grades.*\n")
+            "*The examples above are pre-loaded into `TESTS` in the solution file,\n"
+            "with extra hand-written edge cases after them — `grind check` runs the\n"
+            "first few, `grind done` runs all of them and grades.*\n")
 
 
 def _fmt_tests(tests: list, mode: str) -> str:
@@ -139,9 +140,12 @@ def render_py(prob: dict, entry: dict, target: float, phase: str) -> str:
             f"https://leetcode.com/problems/{prob['slug']}/\n"
             f"Statement: {prob['slug']}.md   ·   Fluency target: {target:g} min ({phase})\n"
             '"""\n')
+    note = ("# the trailing int in each case is LeetCode's pos: the index the\n"
+            "# tail connects back to (-1 = no cycle)\n"
+            if entry.get("sem", {}).get("cycle") else "")
     parts = [p for p in [_imports(code), _helpers(code)] if p]
     parts.append(code)
-    parts.append(_fmt_tests(entry["tests"], entry["mode"]))
+    parts.append(note + _fmt_tests(entry["tests"], entry["mode"]))
     return head + "\n\n" + "\n\n".join(parts) + "\n"
 
 # ---------------------------------------------------------- node conversions
@@ -266,17 +270,37 @@ def _anno(fn, i: int) -> str:
         return ""
 
 
+def _node_anno(a: str) -> str:
+    """The node class an annotation names exactly — 'ListNode',
+    'Optional[TreeNode]', 'Node | None'. '' for anything else: a composite
+    like 'list[ListNode | None]' names a list OF nodes, not a node — the
+    outer value must pass through so only its elements convert."""
+    m = re.match(r"^(?:Optional\[)?(ListNode|TreeNode|Node)\]?(?:\s*\|\s*None)?$",
+                 a.strip().replace("'", "").replace('"', ""))
+    return m.group(1) if m else ""
+
+
+def _inner_node_anno(a: str) -> str:
+    """The node class inside a list[...] annotation — 'list[ListNode | None]'
+    names a list whose elements each convert to that node type."""
+    m = re.match(r"^[Ll]ist\[(?:Optional\[)?(ListNode|TreeNode|Node)\]?(?:\s*\|\s*None)?\]$",
+                 a.strip().replace("'", "").replace('"', ""))
+    return m.group(1) if m else ""
+
+
 def _convert_arg(fn, i, val, mod):
     a = _anno(fn, i)
-    if "ListNode" in a:
+    kind = _node_anno(a)
+    if kind == "ListNode":
         return to_linked(val, mod.ListNode) if isinstance(val, list) else mod.ListNode(val)
-    if "TreeNode" in a:
+    if kind == "TreeNode":
         return to_tree(val, mod.TreeNode) if isinstance(val, list) else mod.TreeNode(val)
-    if re.search(r"\bNode\b", a) and "ListNode" not in a \
-            and hasattr(mod, "Node") and _is_random_node(mod.Node):
-        if isinstance(val, list):
-            return to_random_list(val, mod.Node)
-        return mod.Node(val)
+    if kind == "Node" and hasattr(mod, "Node") and _is_random_node(mod.Node):
+        return to_random_list(val, mod.Node) if isinstance(val, list) else mod.Node(val)
+    inner = _inner_node_anno(a)
+    if inner and isinstance(val, list):
+        conv = {"ListNode": to_linked, "TreeNode": to_tree, "Node": to_random_list}[inner]
+        return [conv(v, getattr(mod, inner)) if isinstance(v, list) else v for v in val]
     return val
 
 
@@ -286,12 +310,12 @@ def _convert_out(fn, got, mod):
     a = str(signature(fn).return_annotation) if fn else ""
     if isinstance(got, list):
         return got
-    if "ListNode" in a:
+    kind = _node_anno(a)
+    if kind == "ListNode":
         return from_linked(got)
-    if "TreeNode" in a:
+    if kind == "TreeNode":
         return from_tree(got)
-    if re.search(r"\bNode\b", a) and "ListNode" not in a \
-            and hasattr(mod, "Node") and _is_random_node(mod.Node):
+    if kind == "Node" and hasattr(mod, "Node") and _is_random_node(mod.Node):
         return from_random_list(got)
     if got is None or isinstance(got, (bool, int, float, str)):
         return got
@@ -381,28 +405,36 @@ def run_tests(mod, tests, slug: str) -> tuple[int, int]:
     return passed, len(tests)
 
 
-def _run_call(mod, t, s, want_method):
-    argv, want = (list(t[0]) if isinstance(t[0], (list, tuple)) else [t[0]]), t[1]
-    inst = _solution_class(mod)()
-    fn = _pick_method(inst, want_method)
+def _eval_call(mod, argv, s, want_method):
+    """One method call: printed-form args -> the result LeetCode would print.
+    The computation half of _run_call, factored out so the data pipeline can
+    compute expected values through the exact runner semantics."""
+    pos = None
+    if s.get("cycle") and len(argv) > 1:
+        # trailing arg = LeetCode's pos: index the tail connects back to
+        pos = argv[-1]
+        argv = argv[:-1]
     if s.get("graph"):
         args = [to_graph(v, mod.Node) if isinstance(v, list) and v and isinstance(v[0], list) else v
                 for v in argv]
-    else:
-        args = [_convert_arg(fn, i, v, mod) for i, v in enumerate(argv)]
+        return from_graph(_pick_method(_solution_class(mod)(), want_method)(*args))
+    fn = _pick_method(_solution_class(mod)(), want_method)
+    args = [_convert_arg(fn, i, v, mod) for i, v in enumerate(argv)]
+    if pos is not None and pos >= 0:       # attach the cycle the printed list can't show
+        nodes, cur = [], args[0]
+        while cur is not None:
+            nodes.append(cur)
+            cur = cur.next
+        nodes[-1].next = nodes[pos]
     got = fn(*args)
-    if s.get("graph"):
-        got = from_graph(got)
-        return equal(got, want, s), f"args={argv!r} -> {got!r}" + (
-            "" if equal(got, want, s) else f"  want {want!r}")
     if "inplace" in s:
         k = s["inplace"]
-        a = _anno(fn, k)
-        if "ListNode" in a:
+        kind = _node_anno(_anno(fn, k))
+        if kind == "ListNode":
             got = from_linked(args[k])
-        elif "TreeNode" in a:
+        elif kind == "TreeNode":
             got = from_tree(args[k])
-        elif re.search(r"\bNode\b", a) and "ListNode" not in a:
+        elif kind == "Node":
             got = from_random_list(args[k])
         else:
             got = args[k]          # a plain list the method mutated in place
@@ -410,6 +442,12 @@ def _run_call(mod, t, s, want_method):
         got = got.val
     else:
         got = _convert_out(fn, got, mod)
+    return got
+
+
+def _run_call(mod, t, s, want_method):
+    argv, want = (list(t[0]) if isinstance(t[0], (list, tuple)) else [t[0]]), t[1]
+    got = _eval_call(mod, argv, s, want_method)
     if s.get("nqueens"):
         n = argv[0]
         ok = (isinstance(got, list) and len(got) == n and _valid_nqueens(got))
@@ -438,25 +476,53 @@ def _valid_nqueens(board) -> bool:
     return True
 
 
-def _run_ops(mod, t, s):
-    ops, arglists, wants = t["ops"], t["args"], t["want"]
+def _gots_ops(mod, t, s):
+    """Per-op results in printed form (op 0 — the constructor — is None).
+    Raises on a missing method; other exceptions reach run_tests."""
+    ops, arglists = t["ops"], t["args"]
     cls = _solution_class(mod, prefer=ops[0])
     cargs = [_convert_arg(cls.__init__, i, v, mod)
              for i, v in enumerate(arglists[0] or [])]
     inst = cls(*cargs)
-    prev = None
-    for name, argv, want in zip(ops[1:], arglists[1:], wants[1:]):
+    gots, prev = [None], None
+    for name, argv in zip(ops[1:], arglists[1:]):
         m = getattr(inst, name, None)
         if not callable(m):
-            return False, f"missing method {name!r}"
+            raise ValueError(f"missing method {name!r}")
         fn = getattr(type(inst), name)
         args = [prev if v == "@prev" else _convert_arg(fn, i, v, mod)
                 for i, v in enumerate(argv or [])]
         got = m(*args)
         prev = got
+        gots.append(_convert_out(fn, got, mod))
+    return gots
+
+
+def _run_ops(mod, t, s):
+    try:
+        gots = _gots_ops(mod, t, s)
+    except ValueError as e:
+        return False, str(e)
+    for name, argv, want, got in zip(t["ops"][1:], t["args"][1:],
+                                     t["want"][1:], gots[1:]):
         if want is None or name in s.get("nocheck", []):
             continue
-        got = _convert_out(fn, got, mod)
         if not equal(got, want, s):
             return False, f"{name}({', '.join(repr(a) for a in argv)}) -> {got!r}  want {want!r}"
-    return True, f"{len(ops) - 1} op(s) ok"
+    return True, f"{len(t['ops']) - 1} op(s) ok"
+
+
+def evaluate(mod, t, slug):
+    """The expected value (`want`) for a test case, computed through the
+    runner's own conversion semantics — call mode returns the printed-form
+    result, ops mode the per-op list (None where nothing is asserted).
+    Data-pipeline use: authoring edge-case tests from a reference solution."""
+    s = sem(slug)
+    entry = get(slug)
+    want_method = entry.get("method") if entry else None
+    if isinstance(t, dict):
+        if "ops" in t:
+            return _gots_ops(mod, t, s)
+        return _eval_call(mod, list(t["args"]), s, want_method)
+    return _eval_call(mod, list(t[0]) if isinstance(t[0], (list, tuple)) else [t[0]],
+                      s, want_method)

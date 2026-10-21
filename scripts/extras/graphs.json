@@ -1,0 +1,66 @@
+{
+  "number-of-islands": [
+    {"args": [[["1"]]], "want": 1},
+    {"args": [[["0"]]], "want": 0},
+    {"args": [[["1", "0", "1", "1"]]], "want": 2}
+  ],
+  "max-area-of-island": [
+    {"args": [[[1, 1, 1], [1, 1, 1], [1, 1, 1]]], "want": 9},
+    {"args": [[[1]]], "want": 1},
+    {"args": [[[1, 0], [0, 1]]], "want": 1}
+  ],
+  "clone-graph": [
+    {"args": [[[2], [1]]], "want": [[2], [1]]},
+    {"args": [[[2], [3], [4], [5], [1]]], "want": [[2], [3], [4], [5], [1]]}
+  ],
+  "walls-and-gates": [
+    {"args": [[[0]]], "want": [[0]]},
+    {"args": [[[2147483647, -1], [-1, -1]]], "want": [[2147483647, -1], [-1, -1]]},
+    {"args": [[[0, 0], [0, 0]]], "want": [[0, 0], [0, 0]]}
+  ],
+  "rotting-oranges": [
+    {"args": [[[1, 1], [1, 1]]], "want": -1},
+    {"args": [[[2]]], "want": 0},
+    {"args": [[[1]]], "want": -1}
+  ],
+  "pacific-atlantic-water-flow": [
+    {"args": [[[1, 2]]], "want": [[0, 0], [0, 1]]},
+    {"args": [[[1], [2]]], "want": [[0, 0], [1, 0]]},
+    {"args": [[[3, 3], [3, 3]]], "want": [[0, 0], [0, 1], [1, 0], [1, 1]]}
+  ],
+  "surrounded-regions": [
+    {"args": [[["O"]]], "want": [["O"]]},
+    {"args": [[["X", "X", "X"], ["X", "O", "X"], ["X", "X", "X"]]], "want": [["X", "X", "X"], ["X", "X", "X"], ["X", "X", "X"]]},
+    {"args": [[["O", "O", "O"], ["O", "X", "O"], ["O", "O", "O"]]], "want": [["O", "O", "O"], ["O", "X", "O"], ["O", "O", "O"]]}
+  ],
+  "course-schedule": [
+    {"args": [1, []], "want": true},
+    {"args": [3, [[0, 1], [1, 2], [2, 0]]], "want": false},
+    {"args": [3, [[1, 1]]], "want": false}
+  ],
+  "course-schedule-ii": [
+    {"args": [3, [[0, 1], [1, 2], [2, 0]]], "want": []},
+    {"args": [3, []], "want": [0, 1, 2]},
+    {"args": [4, [[1, 0], [2, 1], [3, 2]]], "want": [0, 1, 2, 3]}
+  ],
+  "graph-valid-tree": [
+    {"args": [2, []], "want": false},
+    {"args": [3, [[0, 1]]], "want": false},
+    {"args": [4, [[0, 1], [0, 2], [0, 3]]], "want": true},
+    {"args": [3, [[0, 1], [0, 1]]], "want": false}
+  ],
+  "number-of-connected-components-in-an-undirected-graph": [
+    {"args": [4, []], "want": 4},
+    {"args": [1, []], "want": 1},
+    {"args": [5, [[0, 1], [2, 1]]], "want": 3}
+  ],
+  "redundant-connection": [
+    {"args": [[[1, 2], [2, 3], [3, 1]]], "want": [3, 1]},
+    {"args": [[[1, 2], [2, 3], [3, 4], [4, 2]]], "want": [4, 2]}
+  ],
+  "word-ladder": [
+    {"args": ["a", "c", ["a", "c"]], "want": 2},
+    {"args": ["a", "b", []], "want": 0},
+    {"args": ["hot", "dog", ["hot", "dog"]], "want": 0}
+  ]
+}

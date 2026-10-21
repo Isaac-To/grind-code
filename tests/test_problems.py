@@ -188,6 +188,44 @@ REF = {
             x *= x
             n >>= 1
         return out"""},
+    "linked-list-cycle": {"hasCycle": """        slow = fast = head
+        while fast and fast.next:
+            slow, fast = slow.next, fast.next.next
+            if slow is fast:
+                return True
+        return False"""},
+    "merge-k-sorted-lists": {"mergeKLists": """        import heapq
+        h = [(n.val, i, n) for i, n in enumerate(lists) if n]
+        heapq.heapify(h)
+        dummy = cur = ListNode()
+        while h:
+            v, i, n = heapq.heappop(h)
+            cur.next, cur = n, n
+            if n.next:
+                heapq.heappush(h, (n.next.val, i, n.next))
+        return dummy.next"""},
+    "copy-list-with-random-pointer": {"copyRandomList": """        if not head:
+            return None
+        made = {}
+        cur = head
+        while cur:
+            made[cur] = Node(cur.val)
+            cur = cur.next
+        cur = head
+        while cur:
+            made[cur].next = made.get(cur.next)
+            made[cur].random = made.get(cur.random)
+            cur = cur.next
+        return made[head]"""},
+    "longest-palindromic-substring": {"longestPalindrome": """        best = s[:1] if s else ""
+        for i in range(len(s)):
+            for a, b in ((i, i), (i, i + 1)):
+                while a >= 0 and b < len(s) and s[a] == s[b]:
+                    if b - a + 1 > len(best):
+                        best = s[a:b + 1]
+                    a -= 1
+                    b += 1
+        return best"""},
 }
 
 
@@ -225,6 +263,43 @@ def test_inplace_compares_mutated_argument():
     passed, total = run_reference("rotate-image", REF["rotate-image"])
     assert passed == total
 
+def test_evaluate_computes_want_through_runner_semantics():
+    # call mode: the printed-form result of one method call — the same
+    # conversion the comparison half of the runner applies.
+    mod = _import_source("eval_call",
+                         "class Solution:\n"
+                         "    def duplicate(self, nums: list[int]) -> list[int]:\n"
+                         "        return nums + nums\n")
+    assert problems.evaluate(mod, {"args": [[1, 2]]}, "contains-duplicate") == [1, 2, 1, 2]
+    assert problems.evaluate(mod, (([1, 2],), None), "contains-duplicate") == [1, 2, 1, 2]
+    # ops mode: per-op results, None for the constructor/void ops — exactly
+    # the want list an ops entry needs.
+    mod = _import_source("eval_ops",
+                         "class MinStack:\n"
+                         "    def __init__(self):\n"
+                         "        self.st = []\n"
+                         "    def push(self, value: int) -> None:\n"
+                         "        self.st.append(value)\n"
+                         "    def top(self) -> int:\n"
+                         "        return self.st[-1]\n")
+    got = problems.evaluate(mod, {"ops": ["MinStack", "push", "top"],
+                                  "args": [[], [5], []]}, "min-stack")
+    assert got == [None, None, 5]
+
+
+def test_ops_mode_missing_method_fails_the_case_not_the_run():
+    # a class without the op the sequence names is a FAIL for that case —
+    # the runner says which method is missing instead of crashing
+    mod = _import_source("ops_missing",
+                         "class MinStack:\n"
+                         "    def __init__(self):\n"
+                         "        self.st = []\n"
+                         "    def push(self, value: int) -> None:\n"
+                         "        self.st.append(value)\n")
+    passed, total = problems.run_tests(
+        mod, [{"ops": ["MinStack", "push", "getMin"],
+               "args": [[], [5], []], "want": [None, None, 5]}], "min-stack")
+    assert (passed, total) == (0, 1)
 
 def test_nqueens_accepts_any_valid_board():
     body = REF["n-queens"]["solveNQueens"].replace(

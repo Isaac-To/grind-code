@@ -112,9 +112,11 @@ plumbing:
 - `solutions/<slug>.py` — the **real** LeetCode signature (`def twoSum(self,
   nums, target)`, design classes keep their names), the `ListNode`/`TreeNode`
   definitions when the problem needs them, and `TESTS` **pre-filled from the
-  problem's examples** — including operation sequences for design problems
-  (`MinStack`, `LRUCache`, …) and the "any valid answer" checks (any-order
-  subsets, any legal N-Queens board, float tolerance).
+  problem's examples plus hand-written edge cases** — empty inputs, single
+  elements, boundaries, extremes (2–4 per problem, on top of the published
+  examples). Design problems get operation sequences (`MinStack`,
+  `LRUCache`, …) and "any valid answer" checks (any-order subsets, any legal
+  N-Queens board, float tolerance) — nothing to copy from the web.
 - `solutions/archive/<slug>/` — the problem's whole history: `attempt-1.py,
   -2, …` (graded attempts, filed automatically on `grind done`), `wip.py`
   (a parked `grind skip`), `statement.md`. `solutions/` itself holds only
@@ -183,12 +185,17 @@ problems-solved counts.
 - Solutions + statements: `./solutions/` (override with `GRIND_SOLUTIONS`).
 - Problem bank: `grind/bank.json` — extracted from neetcode.io's own published list;
   slugs/difficulties validated against LeetCode's database. Fully offline afterwards.
-- Problem environments: `grind/problems.json` — statements, real signatures and
-  pre-parsed example tests for all 150 problems, built offline from LeetCode's
-  published data (`scripts/fetch_problems.py` → `scripts/build_problems.py`;
-  premium problems NeetCode includes are hand-bundled in `scripts/premium.json`).
-  The comparison semantics LeetCode's judge applies (any-order rows, in-place
-  mutation, float tolerance) ship with it.
+- Problem environments: `grind/problems.json` — statements, real signatures,
+  pre-parsed example tests **plus hand-written edge cases** for all 150
+  problems, built offline (`scripts/fetch_problems.py` →
+  `scripts/build_problems.py`; premium problems NeetCode includes are
+  hand-bundled in `scripts/premium.json`). The comparison semantics
+  LeetCode's judge applies (any-order rows, in-place mutation, float
+  tolerance) ship with it. Every edge case in `scripts/extras/*.json` was
+  computed from — and is verified against — a heavily commented reference
+  solution in `scripts/references/` (read them to learn an approach), gated
+  by `scripts/edge_tool.py` / `scripts/verify_extras.py` through the same
+  runner `grind done` grades with.
 
 ## Layout
 
