@@ -33,10 +33,10 @@ def register(typename):
     return deco
 
 @register("list[int]")
-def gen_list_int(constraints: dict = None) -> list[int]:
-    n = random.randint(1, 20)
+def gen_list_int(constraints: dict = None, max_n: int = 12) -> list[int]:
+    n = random.randint(1, max_n)
     if constraints and "length" in constraints:
-        n = random.randint(constraints["length"][0], min(constraints["length"][1], 20))
+        n = random.randint(constraints["length"][0], min(constraints["length"][1], max_n))
     lo = -1000
     hi = 1000
     if constraints and "value_range" in constraints:
@@ -133,7 +133,7 @@ def load_reference(slug: str):
     return mod
 
 
-def get_generator_for_param(param_name: str, param_type: str, entry: dict):
+def get_generator_for_param(param_name: str, param_type: str, entry: dict, max_n: int = 12):
     """Map parameter to a generator function."""
     # Custom per-problem constraints
     constraints = {}
@@ -144,7 +144,10 @@ def get_generator_for_param(param_name: str, param_type: str, entry: dict):
             constraints["length"] = entry["constraints"]["length"]
         if "value_range" in entry.get("constraints", {}):
             constraints["value_range"] = entry["constraints"]["value_range"]
-        return lambda: gen_list_int(constraints)
+        # Special case: subsets/permutations problems need smaller n to avoid explosion
+        if entry.get("method") in ("subsets", "subsetsWithDup", "permute"):
+            return lambda: gen_list_int(constraints, max_n=8)
+        return lambda: gen_list_int(constraints, max_n=max_n)
     elif param_type == "str":
         # Special case: letter-combinations-of-a-phone-number expects digits 2-9
         if entry.get("method") == "letterCombinations":
@@ -201,7 +204,7 @@ def generate_cases_for_slug(slug: str, num_cases: int = 30) -> list[dict]:
     # Build generators for each parameter
     generators = []
     for param_name, param_type in params:
-        gen = get_generator_for_param(param_name, param_type, entry)
+        gen = get_generator_for_param(param_name, param_type, entry, max_n=12)
         if gen is None:
             print(f"  No generator for {param_name}: {param_type} in {slug}")
             return []
