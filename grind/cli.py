@@ -331,7 +331,107 @@ def cmd_done(args) -> None:
     store.save(state)  # persist backup flags mutated during the silent backup
     if res["error"]:
         print(f"  backup: {res['error']}")
-    print("Next: grind next")
+
+
+def cmd_edit(args) -> None:
+    """Open the active session's scaffold in $EDITOR."""
+    state = store.load()
+    sess = state["session"]
+    if not sess:
+        sys.exit("No active session. Start one with: grind next")
+    scaffold = Path(sess["scaffold"])
+    if not scaffold.exists():
+        sys.exit(f"scaffold not found: {scaffold}")
+    editor = os.environ.get("EDITOR", "vi")
+    subprocess.call([editor, str(scaffold)])
+
+
+def cmd_web(args) -> None:
+    """Open the active session's LeetCode page in the browser."""
+    state = store.load()
+    sess = state["session"]
+    if not sess:
+        sys.exit("No active session. Start one with: grind next")
+    webbrowser.open(url(sess["slug"]))
+
+
+def cmd_log(args) -> None:
+    """Show recent graded attempts."""
+    state = store.load()
+    logs = state.get("logs", [])
+    if not logs:
+        print("No graded attempts yet.")
+        return
+    limit = len(logs) if args.all else (args.n or 20)
+    for entry in reversed(logs[-limit:]):
+        ts = datetime.fromisoformat(entry["ts"]).strftime("%Y-%m-%d %H:%M")
+        slug = entry["slug"]
+        rating = entry.get("rating", 0.0)
+        solved = "yes" if entry.get("solved") else "no"
+        elapsed = entry.get("elapsed", 0.0)
+        tests = entry.get("tests")
+        test_str = f"  tests={tests}" if tests else ""
+        print(f"{ts}  {slug}  rating={rating:.2f}  elapsed={elapsed:.1f}m  solved={solved}{test_str}")
+
+
+def cmd_list(args) -> None:
+    """List all problems with status (new/due/seen/proven)."""
+    state = store.load()
+    now = sch.utcnow()
+    bank = sch.bank()
+    by_slug = {p["slug"]: p for p in bank}
+    due_set = set(sch.due_reviews(state, now))
+    cards = state.get("cards", {})
+
+    # compute last solved status per slug
+    last_solved: dict[str, bool] = {}
+    for entry in state.get("logs", []):
+        last_solved[entry["slug"]] = entry.get("solved", False)
+
+    rows = []
+    for p in bank:
+        slug = p["slug"]
+        card = cards.get(slug)
+        if slug not in cards:
+            status = "new"
+        elif slug in due_set:
+            status = "due"
+        elif last_solved.get(slug):
+            status = "proven"
+        else:
+            status = "seen"
+
+        ready = sch.readiness(state, slug, now)
+        due_in = ""
+        if card:
+            c = sch.Card.from_dict(card)
+            if c.due > now:
+                due_in = sch.fmt_interval(c.due, now)
+            else:
+                due_in = "now"
+
+        rows.append((slug, p["topic"], p["difficulty"], status, ready, due_in))
+
+    # filters
+    if args.topic:
+        rows = [r for r in rows if args.topic.lower() in r[1].lower()]
+    if args.due:
+        rows = [r for r in rows if r[3] == "due"]
+    if args.new:
+        rows = [r for r in rows if r[3] == "new"]
+    if args.proven:
+        rows = [r for r in rows if r[3] == "proven"]
+
+    # sort: due first (most overdue), then by readiness ascending
+    def sort_key(r):
+        status_order = {"due": 0, "new": 1, "seen": 2, "proven": 3}
+        return (status_order.get(r[3], 4), r[4])
+    rows.sort(key=sort_key)
+
+    # print table
+    print(f"{'slug':<30} {'topic':<28} {'diff':<6} {'status':<7} {'ready':>6}  due_in")
+    for slug, topic, diff, status, ready, due_in in rows:
+        print(f"{slug:<30} {topic:<28} {diff:<6} {status:<7} {ready*100:>5.0f}%  {due_in}")
 
 
 def _ask_solved(prob: dict, elapsed: float) -> bool:
@@ -734,6 +834,20 @@ def main(argv=None) -> None:
     p.set_defaults(fn=cmd_next)
     p = sub.add_parser("help", help="show this friendly command overview")
     p.set_defaults(fn=cmd_help)
+    p = sub.add_parser("edit", help="open active session's scaffold in $EDITOR")
+    p.set_defaults(fn=cmd_edit)
+    p = sub.add_parser("web", help="open active session's LeetCode page in browser")
+    p.set_defaults(fn=cmd_web)
+    p = sub.add_parser("log", help="show recent graded attempts")
+    p.add_argument("--n", type=int, help="show last N entries (default 20)")
+    p.add_argument("--all", action="store_true", help="show all entries")
+    p.set_defaults(fn=cmd_log)
+    p = sub.add_parser("list", help="list all problems with status (new/due/seen/proven)")
+    p.add_argument("--topic", help="filter by topic substring")
+    p.add_argument("--due", action="store_true", help="show only due problems")
+    p.add_argument("--new", action="store_true", help="show only new (unseen) problems")
+    p.add_argument("--proven", action="store_true", help="show only proven problems")
+    p.set_defaults(fn=cmd_list)
     p = sub.add_parser("done", help="stop timer, grade, schedule next rep")
     p.add_argument("--solved", action="store_true", default=None, help="you solved it (skips prompt)")
     p.add_argument("--fail", dest="solved", action="store_false", default=None, help="you did not solve it")

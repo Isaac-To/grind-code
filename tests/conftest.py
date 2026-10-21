@@ -1,6 +1,7 @@
 """Shared fixtures: isolated state/solutions dirs, deterministic FSRS, helpers."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import builtins
@@ -88,8 +89,9 @@ def seed_review_card(state: dict, slug: str, reps: int = 2) -> None:
 def open_session(slug: str) -> dict:
     """Start a session for `slug` directly in state (bypasses pick)."""
     state = store.load()
+    sol_dir = Path(os.environ.get("GRIND_SOLUTIONS", "solutions"))
     state["session"] = {"slug": slug, "started": now_utc().isoformat(),
-                        "why": "test", "scaffold": f"solutions/{slug}.py"}
+                        "why": "test", "scaffold": str(sol_dir / f"{slug}.py")}
     store.save(state)
     return state
 

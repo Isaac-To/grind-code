@@ -183,6 +183,31 @@ The ungraded attempt is not lost: if its file exists it is parked as
 `archive/<slug>/wip.py` (the latest skip wins) with the statement beside it,
 printing `work in progress filed → <path>`; the next time the problem is
 picked, the WIP is restored exactly where it left off.
+### `grind edit`
+Opens the active session's scaffold file in `$EDITOR` (vi if unset), blocking
+until the editor exits. No session → exit 1: `No active session. Start one with: grind next`.
+Scaffold file missing → exit 1: `scaffold not found: <path>`.
+
+### `grind web`
+Opens the active session's LeetCode problem page in the default browser.
+No session → exit 1: `No active session. Start one with: grind next`.
+
+### `grind log [--n N] [--all]`
+Prints recent graded attempts from the review log, most recent last.
+Default: last 20 entries. `--n N` shows last N; `--all` shows all.
+Each line: `YYYY-MM-DD HH:MM  slug  rating=X.XX  elapsed=Y.m  solved=yes|no  tests=p/t`
+(omitting `tests=` when the gate didn't run).
+
+### `grind list [--topic TOPIC] [--due] [--new] [--proven]`
+Lists all 150 problems with their status: **new** (unseen), **due** (overdue or due now),
+**proven** (last attempt solved), or **seen** (card exists, not due, last attempt unsolved).
+Columns: `slug  topic  difficulty  status  readiness  due_in`.
+Filters (can combine):
+- `--topic TOPIC` — case-insensitive substring match on topic name.
+- `--due` — only due problems.
+- `--new` — only new (unseen) problems.
+- `--proven` — only proven problems.
+Sort order: due first (most overdue), then by readiness ascending.
 
 ### `grind status`
 One-screen snapshot: `seen/150 · due · new today (clamped) · streak cur (best) ·

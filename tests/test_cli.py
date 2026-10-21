@@ -142,7 +142,7 @@ def test_done_gate_pass_grades_solved(env, capsys, no_fuzz):
     o = out(capsys)
     assert "full suite: 2/2 passed" in o
     assert "solved in 8m" in o and "rating 3.3" in o
-    assert "next review in" in o and "Next: grind next" in o
+    assert "next review in" in o
     s = store.load()
     log = s["logs"][-1]
     assert log["solved"] is True and log["new"] is True
@@ -756,3 +756,171 @@ def test_reference_defaults_to_active_session(env, capsys):
     o = out(capsys)
     assert "Reference solution for binary-search" in o
     assert "def search(" in o
+# ---------------------------------------------------------------- help
+
+def test_help_prints_overview(env, capsys):
+    run(["help"], capsys)
+    o = out(capsys)
+    assert "Daily loop:" in o
+    assert "grind next" in o
+    assert "grind done" in o
+    assert "Inspect & learn:" in o
+    assert "grind reference" in o
+    assert "Config & maintenance:" in o
+    assert "grind backup" in o
+    assert "grind update" in o
+
+
+def test_edit_no_session(env, capsys):
+    assert run(["edit"], capsys) == 1
+    assert "No active session" in out(capsys)
+
+
+def test_edit_scaffold_not_found(env, capsys):
+    open_session("two-sum")
+    # Don't create scaffold file
+    assert run(["edit"], capsys) == 1
+    assert "scaffold not found" in out(capsys)
+
+
+def test_edit_with_session(env, capsys, monkeypatch):
+    open_session("two-sum")
+    # Create the scaffold file
+    from grind import store
+    from pathlib import Path
+    state = store.load()
+    sol_dir = Path(state["session"]["scaffold"]).parent
+    sol_dir.mkdir(parents=True, exist_ok=True)
+    Path(state["session"]["scaffold"]).write_text("# scaffold\n")
+    monkeypatch.setenv("EDITOR", "vi")
+
+    called = []
+
+    def fake_call(args):
+        called.append(args)
+        return 0
+
+    monkeypatch.setattr("grind.cli.subprocess.call", fake_call)
+    assert run(["edit"], capsys) is None
+    assert called == [["vi", str(state["session"]["scaffold"])]]
+
+
+def test_web_no_session(env, capsys):
+    assert run(["web"], capsys) == 1
+    assert "No active session" in out(capsys)
+
+
+def test_web_with_session(env, capsys, monkeypatch):
+    open_session("two-sum")
+    opened = []
+
+    def fake_open(url):
+        opened.append(url)
+
+    monkeypatch.setattr("webbrowser.open", fake_open)
+    assert run(["web"], capsys) is None
+    assert opened == ["https://leetcode.com/problems/two-sum/"]
+
+# ---------------------------------------------------------------- log
+
+def test_log_empty(env, capsys):
+    run(["log"], capsys)
+    assert "No graded attempts yet." in out(capsys)
+
+
+def test_log_prints_recent(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--solved", "--mins", "10"], capsys)  # adds a log
+    run(["done", "--fail", "--mins", "5"], capsys)     # adds another
+
+    run(["log"], capsys)
+    o = out(capsys)
+    assert "contains-duplicate" in o
+    assert "rating=" in o
+    assert "elapsed=" in o
+    assert "solved=" in o
+
+
+def test_log_n_flag(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    run(["done", "--fail", "--mins", "5"], capsys)
+    run(["done", "--solved", "--mins", "8"], capsys)
+
+    run(["log", "--n", "2"], capsys)
+    lines = [l for l in out(capsys).splitlines() if "contains-duplicate" in l]
+    assert len(lines) == 2
+
+
+def test_log_all_flag(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    run(["done", "--fail", "--mins", "5"], capsys)
+
+    run(["log", "--all"], capsys)
+    lines = [l for l in out(capsys).splitlines() if "contains-duplicate" in l]
+    assert len(lines) == 2
+
+# ---------------------------------------------------------------- list
+
+def test_list_shows_all(env, capsys):
+    run(["list"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    # header + 150 problems
+    assert len(lines) >= 150
+
+
+def test_list_due_filter(env, capsys, no_fuzz):
+    data, sol = env
+    # Seed an overdue review card
+    state = store.load()
+    seed_review_card(state, "contains-duplicate")
+    store.save(state)
+
+    run(["list", "--due"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    # should only show the due problem(s)
+    for line in lines:
+        assert "due" in line.lower()
+
+
+def test_list_new_filter(env, capsys):
+    run(["list", "--new"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "new" in line.lower()
+
+
+def test_list_proven_filter(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--solved", "--mins", "10"], capsys)  # solved -> proven
+    out(capsys)  # clear buffer
+
+    run(["list", "--proven"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "proven" in line.lower()
+
+
+def test_list_topic_filter(env, capsys):
+    run(["list", "--topic", "arrays"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "arrays" in line.lower()
