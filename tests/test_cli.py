@@ -724,3 +724,35 @@ def test_python_dash_m_entry_point(env, capsys):
     assert r.returncode == 0
     assert "grind status" in r.stdout
     assert "interview readiness" in r.stdout
+def test_reference_prints_verified_solution(env, capsys):
+    run(["reference", "binary-search"], capsys)
+    o = out(capsys)
+    assert "Reference solution for binary-search" in o
+    assert "704. Binary Search" in o
+    assert "def search(" in o
+
+
+def test_extras_prints_hand_written_cases(env, capsys):
+    run(["extras", "binary-search"], capsys)
+    o = out(capsys)
+    assert "Edge cases for binary-search" in o
+    assert "case 1:" in o and "args=[[], 5]" in o and "want=-1" in o
+    assert "case 4:" in o
+
+
+def test_reference_unknown_slug_exits_with_hint(env, capsys):
+    assert run(["reference", "no-such-problem"], capsys) == 1
+    assert "no reference solution for no-such-problem" in out(capsys)
+
+
+def test_extras_unknown_slug_exits_with_hint(env, capsys):
+    assert run(["extras", "no-such-problem"], capsys) == 1
+    assert "no edge cases for no-such-problem" in out(capsys)
+
+
+def test_reference_defaults_to_active_session(env, capsys):
+    open_session("binary-search")
+    run(["reference"], capsys)
+    o = out(capsys)
+    assert "Reference solution for binary-search" in o
+    assert "def search(" in o

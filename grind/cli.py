@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -375,6 +376,45 @@ def cmd_check(args) -> None:
 
 
 
+def _scripts_root() -> Path:
+    """scripts/ lives next to grind/ at the repo root — cwd-independent."""
+    return Path(__file__).resolve().parent.parent / "scripts"
+
+
+def _slug_from_session(args) -> str:
+    slug = args.slug or (store.load()["session"] or {}).get("slug")
+    if not slug:
+        sys.exit("no slug given — pass one: `grind reference <slug>`")
+    return slug
+
+
+def cmd_reference(args) -> None:
+    """Print this problem's verified reference solution — how each edge
+    case's expected value was computed (and verified against the runner)."""
+    slug = _slug_from_session(args)
+    path = _scripts_root() / "references" / f"{slug}.py"
+    if not path.exists():
+        sys.exit(f"no reference solution for {slug} — confirm the slug, "
+                 f"or add one to scripts/references/{slug}.py")
+    print(f"Reference solution for {slug} — computed from, and verified against, "
+          f"scripts/verify_extras.py")
+    print(path.read_text())
+
+
+def cmd_extras(args) -> None:
+    """Print the hand-written edge cases `grind done`'s full suite runs."""
+    slug = _slug_from_session(args)
+    path = _scripts_root() / "extras" / f"{slug}.json"
+    if not path.exists():
+        sys.exit(f"no edge cases for {slug} — only the bundled examples exist")
+    cases = json.loads(path.read_text()).get(slug)
+    if not cases:
+        sys.exit(f"no edge cases for {slug} — only the bundled examples exist")
+    print(f"Edge cases for {slug} (verified against the reference solution) "
+          f"— run them with: grind check {slug}")
+    for i, t in enumerate(cases, 1):
+        print(f"  case {i}: args={t['args']!r} want={t['want']!r}")
+
 # ---------------------------------------------------------------- views
 
 def cmd_status(args) -> None:
@@ -680,6 +720,12 @@ def main(argv=None) -> None:
     p.add_argument("--n", type=int, help="run the first N case(s)")
     p.add_argument("--all", action="store_true", help="run the full set")
     p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("reference", help="print this problem's verified reference solution — how each edge case's expected value was computed")
+    p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
+    p.set_defaults(fn=cmd_reference)
+    p = sub.add_parser("extras", help="print the hand-written edge cases `grind done`'s full suite runs")
+    p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
+    p.set_defaults(fn=cmd_extras)
     p = sub.add_parser("status", help="one-line progress snapshot")
     p.set_defaults(fn=cmd_status)
     p = sub.add_parser("topics", help="per-topic interview-readiness breakdown")

@@ -158,6 +158,25 @@ cases; `--n N` first N; `--all` everything).
 3. Runs cases (§6.4), printing one line each: `[i/n] ok|FAIL args=… -> … want …`.
 4. Any failure → summary + exit 1. Empty subset (fewer cases than 3) runs what exists.
 
+### `grind reference [slug]`
+Prints the verified reference solution for `slug` — the same code whose output
+computed every hand-written edge case in the bank, and that `scripts/verify_extras.py`
+gates against the real runner.
+1. Slug resolution: argument → active session. None available → exit 1:
+   `no slug given — pass one: \`grind reference <slug>\``.
+2. Missing `scripts/references/<slug>.py` → exit 1 with a hint.
+3. Output: one header line, then the full file verbatim (no transformation).
+
+### `grind extras [slug]`
+Prints the hand-written edge cases that `grind done`'s full suite runs for
+`slug` (the bundled examples live in the scaffold; these are the extra cases
+verified against the reference solution).
+1. Slug resolution: argument → active session. None available → exit 1:
+   `no slug given — pass one: \`grind reference <slug>\``.
+2. Missing `scripts/extras/<topic>.json` or the slug absent from it → exit 1
+   with a hint.
+3. Output: one header line, then each case as `case i: args=<args> want=<want>`.
+   Run them interactively with `grind check <slug>`.
 ### `grind skip`
 Drops the active session **without grading or logging**. No session → exit 1.
 The ungraded attempt is not lost: if its file exists it is parked as
