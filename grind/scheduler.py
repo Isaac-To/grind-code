@@ -98,7 +98,7 @@ def new_today(state: dict, now: datetime) -> int:
     return sum(1 for l in state["logs"] if l.get("new") and _today_key(datetime.fromisoformat(l["ts"])) == _today_key(now))
 
 
-def pick_new(state: dict, now: datetime) -> dict | None:
+def pick_new(state: dict, now: datetime, *, ignore_limit: bool = False) -> dict | None:
     """First unseen problem from the least interview-ready topic.
 
     Topic readiness = mean readiness over its whole problem set (unseen = 0),
@@ -107,8 +107,10 @@ def pick_new(state: dict, now: datetime) -> dict | None:
     Ties break toward fewer problems seen, then roadmap order — so a cold
     start walks the NeetCode roadmap, interleaving topics as they strengthen.
     Within a topic, problems appear in NeetCode's curated order (Easy -> Hard).
+
+    ignore_limit=True: skip the daily_new check.
     """
-    if new_today(state, now) >= state["config"]["daily_new"]:
+    if not ignore_limit and new_today(state, now) >= state["config"]["daily_new"]:
         return None
     ready = readiness_by_topic(state, now)
     seen = seen_counts_by_topic(state)
@@ -124,18 +126,31 @@ def pick_new(state: dict, now: datetime) -> dict | None:
         for p in remaining:
             if p["topic"] == t:
                 return p
+    return None
 
+def pick_next(state: dict, now: datetime, *, ahead: bool = False, new: bool = False) -> tuple[dict | None, str]:
+    """The single best next problem, and why ('review' / 'new' / 'none').
 
-def pick_next(state: dict, now: datetime) -> tuple[dict | None, str]:
-    """The single best next problem, and why ('review' / 'new' / 'none')."""
-    due = due_reviews(state, now)
-    if due:
-        return by_slug().get(due[0]), "review"
-    p = pick_new(state, now)
+    ahead=True: pull the earliest upcoming review regardless of due date.
+    new=True: ignore daily_new limit and pick a new problem.
+    """
+    if not new:
+        due = due_reviews(state, now)
+        if due:
+            return by_slug().get(due[0]), "review"
+        if ahead:
+            upcoming = sorted((Card.from_dict(d).due, s) for s, d in state["cards"].items())
+            if upcoming:
+                return by_slug().get(upcoming[0][1]), "review"
+            # ahead requested but no cards at all
+            return None, "none"
+    p = pick_new(state, now, ignore_limit=new)
     if p:
         return p, "new"
-    upcoming = sorted((Card.from_dict(d).due, s) for s, d in state["cards"].items())
-    return None, "none" if not upcoming else upcoming[0][1]
+    if not new and not ahead:
+        upcoming = sorted((Card.from_dict(d).due, s) for s, d in state["cards"].items())
+        return None, "none" if not upcoming else upcoming[0][1]
+    return None, "none"
 
 
 # ---------------------------------------------------------------- floating grade

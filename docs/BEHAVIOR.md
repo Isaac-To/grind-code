@@ -113,6 +113,11 @@ Presents the single best problem and starts the session timer.
 6. `--web` or config `auto_web=true`: opens the problem page in the browser.
    `--edit` or config `auto_edit=true`: opens the scaffold in `$EDITOR` (vi if
    unset) and blocks until the editor exits.
+7. `--ahead`: pulls the next review early, ignoring the due date (uses the
+   earliest upcoming review). If no reviews exist, prints `No upcoming reviews
+   to pull.` and exits 0.
+8. `--new`: picks a new problem ignoring the daily_new limit. If all 150
+   problems have been seen, prints `No new problems available.` and exits 0.
 
 ### `grind done`
 Stops the timer and grades. Order of operations:

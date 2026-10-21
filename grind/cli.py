@@ -214,12 +214,17 @@ def cmd_next(args) -> None:
                 print("  restored your grind progress — you're back where you left off")
         store.save(state)
     now = sch.utcnow()
-    prob, why = sch.pick_next(state, now)
+    prob, why = sch.pick_next(state, now, ahead=args.ahead, new=args.new)
     if prob is None:
-        print("All caught up — nothing due right now.")
-        nxt = sorted((datetime.fromisoformat(d["due"]), s) for s, d in state["cards"].items())
-        if nxt:
-            print(f"Next review: {sch.by_slug()[nxt[0][1]]['title']} in {sch.fmt_interval(nxt[0][0], now)}")
+        if args.ahead:
+            print("No upcoming reviews to pull.")
+        elif args.new:
+            print("No new problems available.")
+        else:
+            print("All caught up — nothing due right now.")
+            nxt = sorted((datetime.fromisoformat(d["due"]), s) for s, d in state["cards"].items())
+            if nxt:
+                print(f"Next review: {sch.by_slug()[nxt[0][1]]['title']} in {sch.fmt_interval(nxt[0][0], now)}")
         return
     start_session(state, prob, "review" if why == "review" else "new problem")
     if args.web or state["config"].get("auto_web"):
@@ -831,6 +836,8 @@ def main(argv=None) -> None:
     p = sub.add_parser("next", help="present the best next problem and start the timer")
     p.add_argument("--web", action="store_true", help="open the problem in your browser")
     p.add_argument("--edit", action="store_true", help="open the scaffold in $EDITOR")
+    p.add_argument("--ahead", action="store_true", help="pull the next review early (ignore due date)")
+    p.add_argument("--new", action="store_true", help="pick a new problem (ignore daily limit)")
     p.set_defaults(fn=cmd_next)
     p = sub.add_parser("help", help="show this friendly command overview")
     p.set_defaults(fn=cmd_help)

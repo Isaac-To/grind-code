@@ -129,6 +129,70 @@ def test_next_edit_flag_and_config(env, capsys, monkeypatch):
     store.save(s)
     run(["next"], capsys)
     assert len(called) == 2
+def test_next_ahead_pulls_future_review(env, capsys, no_fuzz):
+    """--ahead pulls the earliest upcoming review regardless of due date."""
+    data, sol = env
+    # Seed two future review cards
+    from conftest import seed_review_card
+    state = store.load()
+    seed_review_card(state, "two-sum")
+    seed_review_card(state, "valid-anagram")
+    store.save(state)
+
+    # Regular pick should get a new problem (no due reviews)
+    run(["next"], capsys)
+    o = out(capsys)
+    assert "new problem" in o
+
+    # Skip the session so we can test --ahead
+    run(["skip"], capsys)
+
+    # --ahead should pull the earliest upcoming review
+    run(["next", "--ahead"], capsys)
+    o = out(capsys)
+    assert "review" in o
+    assert "Two Sum" in o or "Valid Anagram" in o  # earliest due
+
+
+def test_next_ahead_no_upcoming(env, capsys):
+    """--ahead with no cards prints helpful message."""
+    # Pre-consume intro flag
+    s = store.load()
+    s["seen_intro"] = True
+    store.save(s)
+
+    run(["next", "--ahead"], capsys)
+    assert "No upcoming reviews to pull" in out(capsys)
+
+
+def test_next_new_ignores_daily_limit(env, capsys, no_fuzz):
+    """--new ignores daily_new limit and picks a new problem."""
+    data, sol = env
+    s = store.load()
+    s["config"]["daily_new"] = 0
+    store.save(s)
+
+    # Regular pick should hit limit
+    run(["next"], capsys)
+    assert "All caught up" in out(capsys)
+
+    # --new should pick anyway
+    run(["next", "--new"], capsys)
+    o = out(capsys)
+    assert "new problem" in o
+
+
+def test_next_new_no_remaining(env, capsys, no_fuzz):
+    """--new with no unseen problems prints helpful message."""
+    # Mark all problems as seen by seeding review cards
+    s = store.load()
+    from conftest import seed_review_card
+    for p in sch.bank():
+        seed_review_card(s, p["slug"])
+    store.save(s)
+
+    run(["next", "--new"], capsys)
+    assert "No new problems available" in out(capsys)
 
 
 # ---------------------------------------------------------------- done
