@@ -859,6 +859,272 @@ def cmd_restore(args) -> None:
     print(f"restored from {url} — readiness {ready:.0f}%, {len(state['logs'])} reviews, "
           f"{len(state['cards'])} problems seen")
 
+# ---------------------------------------------------------------- completion
+
+def _completion_data() -> dict:
+    """Return all completion-relevant data as a dict (single source of truth)."""
+    from .scheduler import bank
+
+    problems = bank()
+    slugs = [p["slug"] for p in problems]
+
+    # Build subcommand -> flags map from the parser structure
+    # We reconstruct it here to keep it in sync with main()
+    subcommands = {
+        "next": ["--web", "--edit", "--ahead", "--new"],
+        "help": [],
+        "pause": [],
+        "edit": [],
+        "web": [],
+        "log": ["--n", "--all"],
+        "list": ["--topic", "--due", "--new", "--proven"],
+        "done": ["--solved", "--fail", "--rating", "--mins"],
+        "skip": [],
+        "check": ["--n", "--all"],
+        "reference": [],
+        "extras": [],
+        "status": [],
+        "topics": [],
+        "stats": [],
+        "config": [],
+        "backup": ["--remote"],
+        "restore": ["--force"],
+        "update": [],
+        "completion": [],
+        "redo": [],
+    }
+
+    # Global flags (always available)
+    global_flags = ["--version", "--help"]
+
+    # Config keys
+    config_keys = [
+        "daily_new",
+        "retention_target",
+        "auto_web",
+        "auto_edit",
+        "backup_remote",
+        "update_check",
+    ]
+
+    return {
+        "subcommands": subcommands,
+        "slugs": slugs,
+        "global_flags": global_flags,
+        "config_keys": config_keys,
+    }
+
+
+def cmd__completion_data(args) -> None:
+    """Internal: print completion data as JSON."""
+    import json
+    print(json.dumps(_completion_data()))
+
+
+def _completion_script_bash(data: dict) -> str:
+    lines = [
+        "# grind bash completion",
+        "# Source this file or run: grind completion bash > /path/to/completion",
+        "",
+        "_grind_completions() {",
+        "    local cur prev words cword",
+        "    _init_completion || return",
+        "    local subcommands=\"{}\"".format(" ".join(sorted(data["subcommands"].keys()))),
+        "    local slugs=\"{}\"".format(" ".join(data["slugs"])),
+        "    local config_keys=\"{}\"".format(" ".join(data["config_keys"])),
+        "",
+        "    if [[ $cword -eq 1 ]]; then",
+        "        COMPREPLY=($(compgen -W \"$subcommands\" -- \"$cur\"))",
+        "        return",
+        "    fi",
+        "",
+        "    local cmd=\"${words[1]}\"",
+        "    case \"$cmd\" in",
+        "        check|reference|extras|redo)",
+        "            COMPREPLY=($(compgen -W \"$slugs\" -- \"$cur\"))",
+        "            ;;",
+        "        config)",
+        "            COMPREPLY=($(compgen -W \"$config_keys\" -- \"$cur\"))",
+        "            ;;",
+        "        completion)",
+        "            COMPREPLY=($(compgen -W \"bash zsh fish\" -- \"$cur\"))",
+        "            ;;",
+        "        list)",
+        "            local list_flags=\"--topic --due --new --proven\"",
+        "            COMPREPLY=($(compgen -W \"$list_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        log)",
+        "            local log_flags=\"--n --all\"",
+        "            COMPREPLY=($(compgen -W \"$log_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        done)",
+        "            local done_flags=\"--solved --fail --rating --mins\"",
+        "            COMPREPLY=($(compgen -W \"$done_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        backup)",
+        "            local backup_flags=\"--remote\"",
+        "            COMPREPLY=($(compgen -W \"$backup_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        restore)",
+        "            local restore_flags=\"--force\"",
+        "            COMPREPLY=($(compgen -W \"$restore_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        next)",
+        "            local next_flags=\"--web --edit --ahead --new\"",
+        "            COMPREPLY=($(compgen -W \"$next_flags\" -- \"$cur\"))",
+        "            ;;",
+        "        *)",
+        "            local all_flags=\"{}\"".format(" ".join(data["global_flags"])),
+        "            COMPREPLY=($(compgen -W \"$all_flags\" -- \"$cur\"))",
+        "            ;;",
+        "    esac",
+        "}",
+        "",
+        "complete -F _grind_completions grind",
+    ]
+    return "\n".join(lines)
+
+
+def _completion_script_zsh(data: dict) -> str:
+    lines = [
+        "#compdef grind",
+        "# grind zsh completion",
+        "# Source this file or run: grind completion zsh > /path/to/_grind",
+        "",
+        "_grind() {",
+        "    local -a subcommands",
+        "    local -a slugs",
+        "    local -a config_keys",
+        "    local -a global_flags",
+        "",
+        "    subcommands=({})".format(" ".join(f"'{s}'" for s in sorted(data["subcommands"].keys()))),
+        "    slugs=({})".format(" ".join(f"'{s}'" for s in data["slugs"])),
+        "    config_keys=({})".format(" ".join(f"'{s}'" for s in data["config_keys"])),
+        "    global_flags=({})".format(" ".join(f"'{s}'" for s in data["global_flags"])),
+        "",
+        "    local context state state_descr line",
+        "    declare -A opt_args",
+        "",
+        "    _arguments -C \\",
+        "        '($global_flags)'{$global_flags}'[Global options]' \\",
+        "        '1: :($subcommands)' \\",
+        "        '*::arg:->args'",
+        "",
+        "    case $state in",
+        "        (subcmds)",
+        "            _describe 'subcommand' subcommands",
+        "            ;;",
+        "        (args)",
+        "            case $line[1] in",
+        "                (check|reference|extras|redo)",
+        "                    _values 'problem' $slugs",
+        "                    ;;",
+        "                (config)",
+        "                    _values 'config key' $config_keys",
+        "                    ;;",
+        "                (completion)",
+        "                    _values 'shell' 'bash' 'zsh' 'fish'",
+        "                    ;;",
+        "                (list)",
+        "                    _arguments '--topic[Filter by topic substring]' '--due[Show only due problems]' '--new[Show only new problems]' '--proven[Show only proven problems]'",
+        "                    ;;",
+        "                (log)",
+        "                    _arguments '--n[Show last N entries]' '--all[Show all entries]'",
+        "                    ;;",
+        "                (done)",
+        "                    _arguments '--solved[You solved it]' '--fail[You did not solve it]' '--rating[Override rating (1..4)]' '--mins[Override elapsed time (minutes)]'",
+        "                    ;;",
+        "                (backup)",
+        "                    _arguments '--remote[Git URL to back up to]'",
+        "                    ;;",
+        "                (restore)",
+        "                    _arguments '--force[Overwrite existing local state]'",
+        "                    ;;",
+        "                (next)",
+        "                    _arguments '--web[Open in browser]' '--edit[Open in editor]' '--ahead[Pull next review early]' '--new[Pick a new problem]'",
+        "                    ;;",
+        "                (*)",
+        "                    _arguments $global_flags",
+        "                    ;;",
+        "            esac",
+        "            ;;",
+        "    esac",
+        "}",
+        "",
+        "compdef _grind grind",
+    ]
+    return "\n".join(lines)
+
+
+def _completion_script_fish(data: dict) -> str:
+    lines = [
+        "# grind fish completion",
+        "# Source this file or run: grind completion fish > ~/.config/fish/completions/grind.fish",
+        "",
+        "complete -c grind -f -a '({})'".format(" ".join(sorted(data["subcommands"].keys()))),
+        "",
+    ]
+    # Subcommand-specific completions
+    for cmd, flags in data["subcommands"].items():
+        if flags:
+            lines.append("complete -c grind -f -n '__fish_use_subcommand {}' -a '{}'".format(
+                cmd, " ".join(flags)))
+    # Slug completions for commands that take a slug
+    slug_cmds = ["check", "reference", "extras", "redo"]
+    for cmd in slug_cmds:
+        lines.append("complete -c grind -f -n '__fish_use_subcommand {}' -a '{}'".format(
+            cmd, " ".join(f"'{s}'" for s in data["slugs"])))
+    # Config keys
+    lines.append("complete -c grind -f -n '__fish_use_subcommand config' -a '{}'".format(
+        " ".join(f"'{k}'" for k in data["config_keys"])))
+    return "\n".join(lines)
+
+
+def cmd_completion(args) -> None:
+    """Print shell completion script for bash, zsh, or fish."""
+    data = _completion_data()
+    if args.shell == "bash":
+        print(_completion_script_bash(data))
+    elif args.shell == "zsh":
+        print(_completion_script_zsh(data))
+    elif args.shell == "fish":
+        print(_completion_script_fish(data))
+
+
+# ---------------------------------------------------------------- redo
+
+def cmd_redo(args) -> None:
+    """Mark a problem as due now for immediate re-attempt."""
+    import sys
+    from . import scheduler as sch
+    from . import store
+
+    state = store.load()
+    slug = args.slug
+
+    # Resolve slug: arg -> active session -> last graded
+    if not slug:
+        sess = state.get("session") or {}
+        slug = sess.get("slug")
+    if not slug and state.get("logs"):
+        slug = state["logs"][-1]["slug"]
+    if not slug:
+        sys.exit("pass a problem id (e.g. 'two-sum'), run during an active session, or grade something first")
+
+    # Validate slug exists in bank
+    by_slug_map = {p["slug"]: p for p in sch.bank()}
+    if slug not in by_slug_map:
+        sys.exit(f"unknown problem: {slug}")
+
+    prob = by_slug_map[slug]
+    now = sch.utcnow()
+
+    # Mark as due now
+    if not sch.mark_due_now(state, slug, now):
+        sys.exit("problem not seen yet — use 'grind next --new' to learn it")
+
+    store.save(state)
+    print(f"Redo queued: {prob['title']} — grind next will pick it immediately")
 # ---------------------------------------------------------------- entry
 
 def main(argv=None) -> None:
@@ -923,6 +1189,18 @@ def main(argv=None) -> None:
     p.add_argument("url", nargs="?", help="backup repo url (defaults to backup_remote)")
     p.add_argument("--force", action="store_true", help="overwrite existing local state")
     p.set_defaults(fn=cmd_restore)
+    # completion subcommand (hidden _completion_data for internal use)
+    p = sub.add_parser("completion", help="print shell completion script (bash|zsh|fish)")
+    p.add_argument("shell", choices=["bash", "zsh", "fish"], help="target shell")
+    p.set_defaults(fn=cmd_completion)
+    p = sub.add_parser("_completion_data", help=argparse.SUPPRESS)
+    p.set_defaults(fn=cmd__completion_data)
+
+    # redo subcommand
+    p = sub.add_parser("redo", help="mark a problem as due now for immediate re-attempt")
+    p.add_argument("slug", nargs="?", help="problem slug (defaults to active session or last graded)")
+    p.set_defaults(fn=cmd_redo)
+
     p = sub.add_parser("update", help="pull the latest version and reinstall (refuses a dirty tree)")
     p.set_defaults(fn=update.cmd_update)
     ap.add_argument("--version", action="version", version=f"grind {__version__}")

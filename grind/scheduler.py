@@ -90,6 +90,22 @@ def due_reviews(state: dict, now: datetime) -> list[str]:
     return [s for _, s in sorted(out)]
 
 
+def mark_due_now(state: dict, slug: str, now: datetime) -> bool:
+    """Mark a problem's card as due now (just past due).
+
+    Returns True if the card existed and was updated, False if no card exists
+    (problem never seen).
+    """
+    c = card_of(state, slug)
+    if c is None:
+        return False
+    # Set due to 1 second ago so it's the most overdue
+    # Set due to 1 hour ago so it's the most overdue among due items
+    c.due = now - timedelta(hours=1)
+    state["cards"][slug] = c.to_dict()
+    return True
+
+
 def _today_key(now: datetime) -> str:
     return now.astimezone().date().isoformat()
 
