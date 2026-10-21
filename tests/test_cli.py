@@ -306,7 +306,7 @@ def test_check_error_paths(env, capsys):
     sol.mkdir(parents=True, exist_ok=True)
     (sol / "two-sum.py").write_text("x = 1\n")                   # no Solution
     assert run(["check", "two-sum"], capsys) == 1
-    assert "define a `class Solution`" in out(capsys)
+    assert "define your solution class" in out(capsys)
     (sol / "valid-anagram.py").write_text("class Solution:\n    pass\n")  # no TESTS
     assert run(["check", "valid-anagram"], capsys) == 1
     assert "add TESTS" in out(capsys)

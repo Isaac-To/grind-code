@@ -6,23 +6,25 @@ Loop:  grind next   -> presents the best problem, writes a scaffold, starts time
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import shutil
 import subprocess
 import sys
+import types
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import scheduler as sch
+from . import problems
 from . import store
 READY_GOAL = 0.80  # overall readiness at which you're interview ready
 INTRO = """
 Welcome to grind — a spaced-repetition trainer for the NeetCode 150 (the OA pattern set).
 The daily loop:
   grind next    presents the best problem — due reviews first, otherwise a new
-                one from your least-ready topic; a scaffold appears in ./solutions/
+                one from your least-ready topic; its environment appears in
+                ./solutions/ (statement, real signature, pre-filled tests)
   grind check   quick test of your solution against a few cases (while you solve)
   grind done    runs the FULL test suite, grades you on outcome + time, and
                 schedules the next review automatically
@@ -46,27 +48,37 @@ def _fmt_min(m: float) -> str:
 
 # ---------------------------------------------------------------- session
 
+def _legacy_scaffold(prob: dict, target: float, phase: str) -> str:
+    """Scaffold for problems with no bundled environment data."""
+    return (
+        f'"""\n{prob["num"]}. {prob["title"]}  [{prob["difficulty"]}]  ({prob["topic"]})\n\n'
+        f"{url(prob['slug'])}\n"
+        f'Fluency target: {target} min ({phase})\n"""\n'
+        "\nclass Solution:\n"
+        "    def solve(self):\n"
+        "        pass\n"
+        "\n# quick check: grind check   -- fill from the problem's examples\n"
+        "# single-method solutions are auto-discovered; the last public method\n"
+        "# wins if you define helpers.\n"
+        "TESTS = [\n"
+        "    # ((args...), expected),\n"
+        "]\n"
+    )
+
+
 def start_session(state: dict, prob: dict, why: str) -> None:
     now = sch.utcnow()
     sol_dir = Path(os.environ.get("GRIND_SOLUTIONS", "solutions"))
     sol_dir.mkdir(parents=True, exist_ok=True)
     scaffold = sol_dir / f"{prob['slug']}.py"
     target, phase = sch.target_info(state, prob)
+    entry = problems.get(prob["slug"])
     if not scaffold.exists():
-        scaffold.write_text(
-            f'"""\n{prob["num"]}. {prob["title"]}  [{prob["difficulty"]}]  ({prob["topic"]})\n\n'
-            f"{url(prob['slug'])}\n"
-            f'Fluency target: {target} min ({phase})\n"""\n'
-            "\nclass Solution:\n"
-            "    def solve(self):\n"
-            "        pass\n"
-            "\n# quick check: grind check   -- fill from the problem's examples\n"
-            "# single-method solutions are auto-discovered; the last public method\n"
-            "# wins if you define helpers.\n"
-            "TESTS = [\n"
-            "    # ((args...), expected),\n"
-            "]\n"
-        )
+        scaffold.write_text(problems.render_py(prob, entry, target, phase) if entry
+                            else _legacy_scaffold(prob, target, phase))
+    md = sol_dir / f"{prob['slug']}.md"
+    if entry and not md.exists():
+        md.write_text(problems.render_md(prob, entry, target, phase))
     state["session"] = {"slug": prob["slug"], "started": now.isoformat(), "why": why,
                         "scaffold": str(scaffold)}
     store.save(state)
@@ -74,7 +86,9 @@ def start_session(state: dict, prob: dict, why: str) -> None:
     print(f"{BOLD}{prob['num']}. {prob['title']}{RESET}  "
           f"{DIFF_COLOR[prob['difficulty']]}{prob['difficulty']}{RESET}  ·  {prob['topic']}  ·  {why}")
     print(f"  {url(prob['slug'])}")
-    print(f"  scaffold: {scaffold}   (target {_fmt_min(target)} · {phase})")
+    env = f"statement: {md}" if entry else ""
+    print(f"  scaffold: {scaffold}   (target {_fmt_min(target)} · {phase})" +
+          (f"   ·   {env}" if env else ""))
     print("  solve it in your IDE, verify with `grind check`, then grade with `grind done`")
 
 
@@ -140,7 +154,7 @@ def cmd_done(args) -> None:
             solved = False
         if solved is None and tests:
             try:
-                passed, total = _run_tests(mod, tests)
+                passed, total = problems.run_tests(mod, tests, sess["slug"])
             except ValueError as e:
                 print(f"  {e}")
                 solved = False
@@ -206,32 +220,14 @@ def cmd_skip(args) -> None:
 
 
 def _load_solution(path: Path):
-    spec = importlib.util.spec_from_file_location(f"grind_check_{path.stem.replace('-', '_')}", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    """Compile the file directly — no __pycache__ consultation, so a same-size
+    edit saved in the same second can never serve a stale solution."""
+    name = f"grind_check_{path.stem.replace('-', '_')}"
+    mod = types.ModuleType(name)
+    mod.__file__ = str(path)
+    exec(compile(path.read_text(), str(path), "exec"), mod.__dict__)
     return mod
 
-
-def _run_tests(mod, tests) -> tuple[int, int]:
-    """Run (args, expected) pairs against the Solution's method.
-    Returns (passed, total); prints one line per case."""
-    sol = getattr(mod, "Solution", None)
-    methods = [m for m, v in vars(sol).items() if not m.startswith("_") and callable(v)]
-    if not methods:
-        raise ValueError("no public method found in Solution")
-    fn = getattr(sol(), methods[-1])  # last defined = the required method
-    passed = 0
-    for i, (argv, want) in enumerate(tests, 1):
-        try:
-            got = fn(*argv)
-            ok = got == want or (isinstance(got, (list, tuple))
-                                 and isinstance(want, (list, tuple)) and list(got) == list(want))
-        except Exception as e:
-            got, ok = f"{type(e).__name__}: {e}", False
-        print(f"  [{i}/{len(tests)}] {'ok  ' if ok else 'FAIL'} args={argv!r} -> {got!r}"
-              + ("" if ok else f"  want {want!r}"))
-        passed += ok
-    return passed, len(tests)
 
 
 def cmd_check(args) -> None:
@@ -247,17 +243,14 @@ def cmd_check(args) -> None:
         tests = getattr(mod, "TESTS", None)
     except Exception as e:
         sys.exit(f"error loading {path}: {type(e).__name__}: {e}")
-    if getattr(mod, "Solution", None) is None:
-        sys.exit(f"define a `class Solution` in {path}")
+    if problems._solution_class(mod) is None:
+        sys.exit(f"define your solution class in {path}")
     if not tests:
         sys.exit(f"add TESTS = [((args...), expected), ...] to {path}")
     if not args.all:  # check is a quick subset; grind done runs the full set
         tests = tests[:args.n or 3]
     print(f"checking {slug} ({len(tests)} of {len(getattr(mod, 'TESTS'))} case(s))")
-    try:
-        passed, total = _run_tests(mod, tests)
-    except ValueError as e:
-        sys.exit(str(e))
+    passed, total = problems.run_tests(mod, tests, slug)
     print(f"{passed}/{total} passed" + ("" if passed == total else " — fix and re-run"))
     if passed < total:
         sys.exit(1)

@@ -16,7 +16,7 @@ grind = "grind.cli:main"
 packages = ["grind"]
 
 [tool.setuptools.package-data]
-grind = ["bank.json"]
+grind = ["bank.json", "problems.json"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=6"]

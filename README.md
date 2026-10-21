@@ -71,6 +71,7 @@ pip install -e .
 
 ```bash
 grind next        # best problem right now: due reviews first, else least-ready topic's new
+                  #   sets up the WHOLE environment for that one problem (see below)
                   #   --web  open it in the browser   --edit  open the scaffold in $EDITOR
 grind done        # stop timer, run the FULL test suite, grade, schedule the next rep
                   #   TESTS are ground truth for "solved" when they exist
@@ -87,14 +88,26 @@ grind config      # show/set: daily_new, targets, retention_target, auto_web, au
 grind skip        # drop the active session ungraded
 ```
 
-Solve in your IDE: each `grind next` writes a `solutions/<slug>.py` scaffold with the
-problem link, a `class Solution` stub and a `TESTS` list. Paste the problem's
-example cases into `TESTS` once as `((args...), expected)` pairs — the runner
-auto-discovers the method to call in your `Solution` class (the last public
-method, so helpers go above it).
+Solve in a ready-made environment: each `grind next` writes two files and
+nothing else is needed — no browser hunting, no copy-pasting, no data-structure
+plumbing:
 
-`grind done` then runs the **entire suite as the gate**: all cases pass →
-solved (rating from time vs. your target); any failure → unsolved, rating 1.0,
+- `solutions/<slug>.md` — the full problem statement with examples and
+  constraints, offline.
+- `solutions/<slug>.py` — the **real** LeetCode signature (`def twoSum(self,
+  nums, target)`, design classes keep their names), the `ListNode`/`TreeNode`
+  definitions when the problem needs them, and `TESTS` **pre-filled from the
+  problem's examples** — including operation sequences for design problems
+  (`MinStack`, `LRUCache`, …) and the "any valid answer" checks (any-order
+  subsets, any legal N-Queens board, float tolerance).
+
+You write the body; `grind check`/`grind done` convert the printed values
+(`[1,2,3]` arrays) into linked lists/trees/graph nodes automatically and
+compare with LeetCode's own semantics — in-place mutation, unordered rows,
+node-by-value results included.
+
+`grind done` runs the **entire suite as the gate**: all cases pass → solved
+(rating from time vs. your target); any failure → unsolved, rating 1.0,
 resurfacing within minutes — fix it and `grind next` brings it straight back.
 With no TESTS defined, `done` falls back to asking whether you solved it.
 `grind check` is the lightweight loop while solving — just a few cases to
@@ -138,15 +151,24 @@ problems-solved counts.
 ## Data
 
 - State: `~/.grind-code/state.json` (override with `GRIND_DATA_DIR`).
-- Solutions: `./solutions/` (override with `GRIND_SOLUTIONS`).
+- Solutions + statements: `./solutions/` (override with `GRIND_SOLUTIONS`).
 - Problem bank: `grind/bank.json` — extracted from neetcode.io's own published list;
   slugs/difficulties validated against LeetCode's database. Fully offline afterwards.
+- Problem environments: `grind/problems.json` — statements, real signatures and
+  pre-parsed example tests for all 150 problems, built offline from LeetCode's
+  published data (`scripts/fetch_problems.py` → `scripts/build_problems.py`;
+  premium problems NeetCode includes are hand-bundled in `scripts/premium.json`).
+  The comparison semantics LeetCode's judge applies (any-order rows, in-place
+  mutation, float tolerance) ship with it.
 
 ## Layout
 
 ```
 grind/bank.json     150 problems (slug, title, difficulty, topic, roadmap order)
+grind/problems.json statements + signatures + example tests + comparison semantics
 grind/store.py      JSON persistence
 grind/scheduler.py  FSRS wiring, readiness model, timer→rating, next-best, streaks/trends
+grind/problems.py   per-problem environment: scaffold/statement rendering, test runner
 grind/cli.py        commands
+scripts/            one-time dataset builders (fetch → build), rebuildable offline
 ```

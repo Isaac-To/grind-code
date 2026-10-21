@@ -20,6 +20,21 @@ the reference. Anything not stated here is a bug.
 - Problems appear in bank order = NeetCode's curated within-topic order
   (roughly Easy → Hard). This order *is* the introduction order within a topic.
 
+### Problem environments — `grind/problems.json`
+Bundled, offline, built once from LeetCode's published problem data by
+`scripts/fetch_problems.py` + `scripts/build_problems.py` (premium problems
+NeetCode includes are hand-bundled in `scripts/premium.json`). One entry per
+bank slug:
+
+| key | meaning |
+|---|---|
+| `markdown` | the full statement (examples + constraints), rendered to markdown |
+| `python` | the real LeetCode python3 starter code, normalized to valid Python |
+| `method` | the required method name for single-call problems |
+| `mode` | `call` (one method call) or `ops` (design problems: constructor + operation sequence) |
+| `tests` | pre-parsed examples — see §6.1 |
+| `sem` | comparison semantics the examples can't express — see §6.3 |
+
 ### State — `$GRIND_DATA_DIR/state.json` (default `~/.grind-code/state.json`)
 | key | type | meaning |
 |---|---|---|
@@ -35,10 +50,24 @@ new (bool — first-ever attempt), ts (aware ISO-8601 UTC), tests ("p/t" or null
 Writes are atomic (temp file + rename). Missing config keys are backfilled from
 defaults on load; user values are never overwritten.
 
-### Solutions — `$GRIND_SOLUTIONS/<slug>.py` (default `./solutions/`)
-A scaffold is created on first `grind next` for a problem and **never
-overwritten**. Contents: docstring (number, title, difficulty, topic, URL,
-current target + phase), a `class Solution` stub, and a `TESTS` template.
+### Solutions — `$GRIND_SOLUTIONS/<slug>.py` + `<slug>.md` (default `./solutions/`)
+`grind next` sets up the **whole environment for the one problem**; both files
+are created once and **never overwritten**:
+
+- `<slug>.md` — the statement: header (num, title, difficulty, topic, link,
+  target + phase), the full problem text with examples and constraints, and a
+  note that the examples are pre-loaded into `TESTS`.
+- `<slug>.py` — docstring header (num, title, difficulty, topic, URL, statement
+  link, target + phase); exactly the imports the starter code references;
+  `ListNode`/`TreeNode`/`Node` class definitions when the problem needs them
+  (LeetCode ships these commented-out — grind emits real ones); the real
+  LeetCode starter class and signature (e.g. `def twoSum(self, nums, target)`,
+  design classes keep their names: `MinStack`, `LRUCache`, `Codec`); and
+  `TESTS` **pre-filled from the problem's published examples** — nothing to
+  copy from the web.
+- A problem with no bundled environment data (none today) falls back to the
+  minimal scaffold: header docstring, `class Solution` with a `def solve(self)`
+  stub, and an empty `TESTS` template to fill by hand.
 
 ---
 
@@ -57,12 +86,13 @@ Presents the single best problem and starts the session timer.
 3. Picks via the selection algorithm (§7). If nothing is pickable:
    `All caught up — nothing due right now.` plus `Next review: <title> in <interval>`
    if any card exists with a future due date.
-4. Creates the scaffold if absent, records `session = {slug, started (UTC now),
-   why, scaffold}` — the timer starts **now**.
+4. Sets up the problem environment (§1 Solutions) if absent — scaffold **and**
+   statement — and records `session = {slug, started (UTC now), why, scaffold}`:
+   the timer starts **now**.
 5. Output: bold `num. title  difficulty · topic · "review"|"new problem"`,
-   the LeetCode URL, the scaffold path with `target <X> · <phase>`, and a
-   one-line action hint (`solve it in your IDE, verify with grind check, then
-   grade with grind done`).
+   the LeetCode URL, the scaffold path with `target <X> · <phase>` and, when
+   bundled data exists, `· statement: <slug>.md path`, and a one-line action
+   hint (`solve it in your IDE, verify with grind check, then grade with grind done`).
 6. `--web` or config `auto_web=true`: opens the problem page in the browser.
    `--edit` or config `auto_edit=true`: opens the scaffold in `$EDITOR` (vi if
    unset) and blocks until the editor exits.
@@ -100,9 +130,10 @@ cases; `--n N` first N; `--all` everything).
 1. Slug resolution order: argument → active session → `last` graded problem.
    None available → exit 1: `pass a problem id (e.g. 'two-sum'), run during an
    active session, or grade something first`.
-2. Missing file → exit 1. Import failure → exit 1 with the exception. Missing
-   `Solution` class, no public method, or empty `TESTS` → exit 1 with a
-   precise instruction.
+2. Missing file → exit 1. Import failure → exit 1 with the exception. No
+   solution class, no public method, or empty `TESTS` → exit 1 with a precise
+   instruction (`define your solution class in <path>`; the class is normally
+   `Solution`, but design problems keep their LeetCode names).
 3. Runs cases (§6.4), printing one line each: `[i/n] ok|FAIL args=… -> … want …`.
 4. Any failure → summary + exit 1. Empty subset (fewer cases than 3) runs what exists.
 
@@ -225,22 +256,55 @@ interval fuzzing on.
 
 ## 6. Test running (check / done gate)
 
-### 6.1 File contract
-`solutions/<slug>.py` must define `class Solution` and a module-level `TESTS`
-list of `(args_tuple, expected)` pairs.
+### 6.1 File contract — `TESTS`
+`solutions/<slug>.py` defines the solution class and a module-level `TESTS`
+list. `grind next` pre-fills it from the problem's published examples; the
+user can edit it freely. Two entry shapes:
 
-### 6.2 Method discovery
-The callable method is the **last public method defined in `Solution`**
-(`_`-prefixed names and dunders ignored; class-dict order = definition order).
-Convention: helpers go above the required method. No public method → error.
+- **call mode** — `((arg, ...), expected)`: one method call. Arguments are the
+  values LeetCode prints (arrays for lists/trees/graphs, scalars otherwise).
+- **ops mode** — `{"ops": [...], "args": [[...], ...], "want": [...]}`: design
+  problems. `ops[0]` names the class (skipped as an operation — the runner
+  instantiates it), the rest are method calls with `args[i]` per op and
+  `want[i]` the expected result. `want[i] = None` (constructor/void) is
+  skipped. An argument of the exact string `"@prev"` is replaced by the
+  previous op's return value — that's how round-trip problems
+  (encode/decode, serialize/deserialize) are expressed.
+
+### 6.2 Discovery & conversion
+- **Class**: the class named by `ops[0]` in ops mode; else `Solution`; else the
+  last class defined in the module. Class-dict order = definition order.
+- **Method**: the dataset's recorded method name when the class defines it;
+  else the **last public method** (`_`-prefixed ignored) — the scaffold's
+  convention: helpers go above the required method. None → error.
+- **Values**: guided by the method's type annotations — `ListNode` args
+  become linked lists built from arrays, `TreeNode` args become trees
+  (level-order with `None` holes), random-pointer `Node` args become
+  `[[val, random_index], ...]` lists, and the results convert back to the
+  arrays LeetCode prints. Graph problems (`clone-graph`) get adjacency-list
+  conversion via the module's own node classes. Un-annotated methods: values
+  pass through as-is.
+- The solution file is compiled directly from source (`__pycache__` is never
+  consulted — a same-size edit in the same second can't serve stale code).
 
 ### 6.3 Comparison
-`got == expected`, or list/tuple loose equality (`list(got) == list(expected)`).
-An exception thrown by the method counts as FAIL with the exception text as `got`.
+- Default: `got == expected`, or list/tuple loose equality. An exception thrown
+  by the method counts as FAIL with the exception text as `got`.
+- `sem` flags per problem (§1 problems.json):
+  - `unordered` / `unordered_inner` — rows (and row contents) compared as
+    multisets: any-order answers (`subsets`, `3sum`, `group-anagrams`, …).
+  - `inplace: k` — the method mutates argument `k`; the final state of that
+    argument is compared to `expected`.
+  - `node_out_value` — the returned node is compared by `.val` (LCA).
+  - `float` — numeric results within 1e-5 of the expected value pass.
+  - `nqueens` / `palindromic_substring` — any *valid* answer passes (a legal
+    board, a palindromic substring of the input with the expected length).
+  - `nocheck: [methods]` — ops whose results aren't asserted (randomized).
 
 ### 6.4 Output & effects
-One line per case, `passed/total` summary; `grind done` prefixes `full suite:
-p/t passed`. The runner has no side effects on state; `done` records the result.
+One line per case (`[i/n] ok|FAIL` with args/ops detail), `passed/total`
+summary; `grind done` prefixes `full suite: p/t passed`. The runner has no
+side effects on state; `done` records the result.
 
 ## 7. "Next best" selection
 1. **Due reviews first** (FSRS due ≤ now), most-overdue first.
@@ -277,8 +341,10 @@ p/t passed`. The runner has no side effects on state; `done` records the result.
 | `EDITOR` | `vi` | editor for `--edit` / `auto_edit` |
 
 ## 11. Invariants
-- The bank is static and offline: no network is ever required after install.
-- Nothing is ever deleted: logs only grow; scaffolds are only created.
+- The bank and the problem environments (statements, signatures, example
+  tests) are static and offline: no network is ever required after install.
+- Nothing is ever deleted: logs only grow; scaffolds and statements are only
+  created.
 - `grind skip` never writes history; `grind done` always does (even failures —
   a failed attempt is real and resets readiness).
 - Grading never lies: with TESTS present, a failing suite is unsolved

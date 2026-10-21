@@ -1,0 +1,470 @@
+{
+ "encode-and-decode-strings": {
+  "markdown": "Design an algorithm to encode a list of strings to a string. The encoded string is then sent over the network and is decoded back to the original list of strings.\n\nMachine 1 (sender) has the function:\n\n```\nstring encode(vector<string> strs)\n```\n\nMachine 2 (receiver) has the function:\n\n```\nvector<string> decode(string s)\n```\n\nImplement `encode` and `decode`. You are not allowed to solve the problem using any serialize methods (such as `eval`).\n\n**Example 1:**\n\n```\nInput: strs = [\"neet\",\"code\",\"love\",\"you\"]\nOutput: [\"neet\",\"code\",\"love\",\"you\"]\n```\n\n**Example 2:**\n\n```\nInput: strs = [\"\"]\nOutput: [\"\"]\n```\n\n**Constraints:**\n\n- `0 <= strs.length <= 200`\n- `0 <= strs[i].length <= 200`\n- `strs[i]` contains any possible characters out of 256 valid ASCII characters.\n\n**Follow up:** Could you write your algorithm without using any extra data structure?",
+  "python": "class Codec:\n    def encode(self, strs: List[str]) -> str:\n        pass\n\n    def decode(self, s: str) -> List[str]:\n        pass",
+  "mode": "ops",
+  "tests": [
+   {
+    "ops": [
+     "Codec",
+     "encode",
+     "decode"
+    ],
+    "args": [
+     [],
+     [
+      [
+       "neet",
+       "code",
+       "love",
+       "you"
+      ]
+     ],
+     [
+      "@prev"
+     ]
+    ],
+    "want": [
+     null,
+     null,
+     [
+      "neet",
+      "code",
+      "love",
+      "you"
+     ]
+    ]
+   },
+   {
+    "ops": [
+     "Codec",
+     "encode",
+     "decode"
+    ],
+    "args": [
+     [],
+     [
+      [
+       ""
+      ]
+     ],
+     [
+      "@prev"
+     ]
+    ],
+    "want": [
+     null,
+     null,
+     [
+      ""
+     ]
+    ]
+   },
+   {
+    "ops": [
+     "Codec",
+     "encode",
+     "decode"
+    ],
+    "args": [
+     [],
+     [
+      [
+       "hello",
+       "world",
+       "!",
+       "with spaces"
+      ]
+     ],
+     [
+      "@prev"
+     ]
+    ],
+    "want": [
+     null,
+     null,
+     [
+      "hello",
+      "world",
+      "!",
+      "with spaces"
+     ]
+    ]
+   }
+  ],
+  "sem": {}
+ },
+ "meeting-rooms": {
+  "markdown": "Given an array of meeting time `intervals` consisting of start and end times `[[start_1,end_1],[start_2,end_2],...]` (`start_i < end_i`), determine if a person could attend all meetings.\n\n**Example 1:**\n\n```\nInput: intervals = [[0,30],[5,10],[15,20]]\nOutput: false\n```\n\n**Example 2:**\n\n```\nInput: intervals = [[7,10],[2,4]]\nOutput: true\n```\n\n**Constraints:**\n\n- `0 <= intervals.length <= 10^4`\n- `intervals[i].length == 2`\n- `0 <= start_i < end_i <= 10^6`",
+  "python": "class Solution:\n    def canAttendMeetings(self, intervals: List[List[int]]) -> bool:\n        pass",
+  "mode": "call",
+  "method": "canAttendMeetings",
+  "tests": [
+   {
+    "args": [
+     [
+      [
+       0,
+       30
+      ],
+      [
+       5,
+       10
+      ],
+      [
+       15,
+       20
+      ]
+     ]
+    ],
+    "want": false
+   },
+   {
+    "args": [
+     [
+      [
+       7,
+       10
+      ],
+      [
+       2,
+       4
+      ]
+     ]
+    ],
+    "want": true
+   },
+   {
+    "args": [
+     []
+    ],
+    "want": true
+   }
+  ],
+  "sem": {}
+ },
+ "meeting-rooms-ii": {
+  "markdown": "Given an array of meeting time `intervals` consisting of start and end times `[[start_1,end_1],[start_2,end_2],...]` (`start_i < end_i`), return *the minimum number of conference rooms required*.\n\n**Example 1:**\n\n```\nInput: intervals = [[0,30],[5,10],[15,20]]\nOutput: 2\n```\n\n**Example 2:**\n\n```\nInput: intervals = [[7,10],[2,4]]\nOutput: 1\n```\n\n**Constraints:**\n\n- `1 <= intervals.length <= 10^4`\n- `0 <= start_i < end_i <= 10^6`",
+  "python": "class Solution:\n    def minMeetingRooms(self, intervals: List[List[int]]) -> int:\n        pass",
+  "mode": "call",
+  "method": "minMeetingRooms",
+  "tests": [
+   {
+    "args": [
+     [
+      [
+       0,
+       30
+      ],
+      [
+       5,
+       10
+      ],
+      [
+       15,
+       20
+      ]
+     ]
+    ],
+    "want": 2
+   },
+   {
+    "args": [
+     [
+      [
+       7,
+       10
+      ],
+      [
+       2,
+       4
+      ]
+     ]
+    ],
+    "want": 1
+   },
+   {
+    "args": [
+     [
+      [
+       1,
+       5
+      ],
+      [
+       2,
+       6
+      ],
+      [
+       3,
+       7
+      ]
+     ]
+    ],
+    "want": 3
+   }
+  ],
+  "sem": {}
+ },
+ "graph-valid-tree": {
+  "markdown": "Given `n` nodes labeled from `0` to `n - 1` and a list of undirected edges (each edge is a pair of nodes), write a function to determine whether these edges make up a valid tree.\n\n**Example 1:**\n\n```\nInput: n = 5, edges = [[0,1],[0,2],[0,3],[1,4]]\nOutput: true\n```\n\n**Example 2:**\n\n```\nInput: n = 5, edges = [[0,1],[1,2],[2,3],[1,3],[1,4]]\nOutput: false\n```\n\n**Constraints:**\n\n- `1 <= n <= 2000`\n- `0 <= edges.length <= n * (n - 1) / 2`",
+  "python": "class Solution:\n    def validTree(self, n: int, edges: List[List[int]]) -> bool:\n        pass",
+  "mode": "call",
+  "method": "validTree",
+  "tests": [
+   {
+    "args": [
+     5,
+     [
+      [
+       0,
+       1
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       0,
+       3
+      ],
+      [
+       1,
+       4
+      ]
+     ]
+    ],
+    "want": true
+   },
+   {
+    "args": [
+     5,
+     [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       1,
+       3
+      ],
+      [
+       1,
+       4
+      ]
+     ]
+    ],
+    "want": false
+   },
+   {
+    "args": [
+     1,
+     []
+    ],
+    "want": true
+   }
+  ],
+  "sem": {}
+ },
+ "number-of-connected-components-in-an-undirected-graph": {
+  "markdown": "Given `n` nodes labeled from `0` to `n - 1` and a list of undirected edges (each edge is a pair of nodes), write a function to find the number of connected components in an undirected graph.\n\n**Example 1:**\n\n```\nInput: n = 5, edges = [[0,1],[1,2],[3,4]]\nOutput: 2\n```\n\n**Example 2:**\n\n```\nInput: n = 5, edges = [[0,1],[1,2],[2,3],[3,4]]\nOutput: 1\n```\n\n**Constraints:**\n\n- `1 <= n <= 2000`\n- `0 <= edges.length <= n * (n - 1) / 2`",
+  "python": "class Solution:\n    def countComponents(self, n: int, edges: List[List[int]]) -> int:\n        pass",
+  "mode": "call",
+  "method": "countComponents",
+  "tests": [
+   {
+    "args": [
+     5,
+     [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       3,
+       4
+      ]
+     ]
+    ],
+    "want": 2
+   },
+   {
+    "args": [
+     5,
+     [
+      [
+       0,
+       1
+      ],
+      [
+       1,
+       2
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       3,
+       4
+      ]
+     ]
+    ],
+    "want": 1
+   },
+   {
+    "args": [
+     6,
+     [
+      [
+       0,
+       1
+      ],
+      [
+       2,
+       3
+      ],
+      [
+       4,
+       5
+      ]
+     ]
+    ],
+    "want": 3
+   }
+  ],
+  "sem": {}
+ },
+ "alien-dictionary": {
+  "markdown": "There is a new alien language that uses the Latin alphabet. However, the order among the letters is unknown to you.\n\nYou are given a list of strings `words` from the alien language's dictionary, where the strings in `words` are **sorted lexicographically** by the rules of this new language.\n\nReturn *a string of the unique letters in the new alien language sorted in **lexicographically increasing order** by the new language's rules*. If there is no solution, return `\"\"`. If there are multiple solutions, return **any of them**.\n\nA string `s` is **lexicographically smaller** than string `t` if at the first letter where they differ, the letter in `s` comes before the letter in `t` in the alien language. If the first `min(s.length, t.length)` letters are the same, then `s` is smaller if and only if `s.length < t.length`.\n\n**Example 1:**\n\n```\nInput: words = [\"wrt\",\"wrf\",\"er\",\"ett\",\"rftt\"]\nOutput: \"wertf\"\n```\n\n**Example 2:**\n\n```\nInput: words = [\"z\",\"x\"]\nOutput: \"zx\"\n```\n\n**Example 3:**\n\n```\nInput: words = [\"z\",\"x\",\"z\"]\nOutput: \"\"\n```\n\n**Constraints:**\n\n- `1 <= words.length <= 100`\n- `1 <= words[i].length <= 100`\n- `words[i]` consists of only lowercase English letters.",
+  "python": "class Solution:\n    def alienOrder(self, words: List[str]) -> str:\n        pass",
+  "mode": "call",
+  "method": "alienOrder",
+  "tests": [
+   {
+    "args": [
+     [
+      "wrt",
+      "wrf",
+      "er",
+      "ett",
+      "rftt"
+     ]
+    ],
+    "want": "wertf"
+   },
+   {
+    "args": [
+     [
+      "z",
+      "x"
+     ]
+    ],
+    "want": "zx"
+   },
+   {
+    "args": [
+     [
+      "z",
+      "x",
+      "z"
+     ]
+    ],
+    "want": ""
+   }
+  ],
+  "sem": {}
+ },
+ "walls-and-gates": {
+  "markdown": "You are given an `m x n` grid `rooms` initialized with three possible values:\n\n- `-1` A wall or an obstacle.\n- `0` A gate.\n- `2147483647` INF Infinity, meaning an empty room. We use the value `2^31 - 1` to represent INF, as it may be assumed that the distance to a gate is less than `2^31 - 1`.\n\nFill each empty room with the distance to *its nearest gate*. If it is impossible to reach a gate, it should be filled with `INF`.\n\n**Example 1:**\n\n```\nInput: rooms = [[2147483647,-1,0,2147483647],[2147483647,2147483647,2147483647,-1],[2147483647,-1,2147483647,-1],[0,-1,2147483647,2147483647]]\nOutput: [[3,-1,0,3],[2,2,1,-1],[1,-1,2,-1],[0,-1,3,3]]\n```\n\n**Example 2:**\n\n```\nInput: rooms = [[-1]]\nOutput: [[-1]]\n```\n\n**Constraints:**\n\n- `m == rooms.length`\n- `n == rooms[i].length`\n- `1 <= m, n <= 250`\n- `rooms[i][j]` is `-1`, `0`, or `2^31 - 1`.",
+  "python": "class Solution:\n    def wallsAndGates(self, rooms: List[List[int]]) -> None:\n        pass",
+  "mode": "call",
+  "method": "wallsAndGates",
+  "tests": [
+   {
+    "args": [
+     [
+      [
+       2147483647,
+       -1,
+       0,
+       2147483647
+      ],
+      [
+       2147483647,
+       2147483647,
+       2147483647,
+       -1
+      ],
+      [
+       2147483647,
+       -1,
+       2147483647,
+       -1
+      ],
+      [
+       0,
+       -1,
+       2147483647,
+       2147483647
+      ]
+     ]
+    ],
+    "want": [
+     [
+      3,
+      -1,
+      0,
+      1
+     ],
+     [
+      2,
+      2,
+      1,
+      -1
+     ],
+     [
+      1,
+      -1,
+      2,
+      -1
+     ],
+     [
+      0,
+      -1,
+      3,
+      4
+     ]
+    ]
+   },
+   {
+    "args": [
+     [
+      [
+       -1
+      ]
+     ]
+    ],
+    "want": [
+     [
+      -1
+     ]
+    ]
+   }
+  ],
+  "sem": {
+   "inplace": 0
+  }
+ }
+}
