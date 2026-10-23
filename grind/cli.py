@@ -202,9 +202,10 @@ def cmd_next(args) -> None:
             paused_at = datetime.fromisoformat(sess["paused_at"])
             paused_dur = (sch.utcnow() - paused_at).total_seconds()
             sess["paused_total"] = sess.get("paused_total", 0.0) + paused_dur
+            paused_fmt = _fmt_min(sess["paused_total"] / 60)
             del sess["paused_at"]
             store.save(state)
-            print(f"Resumed: {p['title']}  (was paused)")
+            print(f"Resumed: {p['title']}  (paused {paused_fmt})")
         else:
             el = (sch.utcnow() - datetime.fromisoformat(sess["started"])).total_seconds() / 60
             print(f"Session already active: {p['title']}  ({_fmt_min(el)} elapsed)")
@@ -455,6 +456,8 @@ def cmd_list(args) -> None:
         rows = [r for r in rows if r[3] == "new"]
     if args.proven:
         rows = [r for r in rows if r[3] == "proven"]
+    if args.difficulty:
+        rows = [r for r in rows if r[2] == args.difficulty]
 
     # sort: due first (most overdue), then by readiness ascending
     def sort_key(r):
@@ -466,6 +469,26 @@ def cmd_list(args) -> None:
     print(f"{'slug':<30} {'topic':<28} {'diff':<6} {'status':<7} {'ready':>6}  due_in")
     for slug, topic, diff, status, ready, due_in in rows:
         print(f"{slug:<30} {topic:<28} {diff:<6} {status:<7} {ready*100:>5.0f}%  {due_in}")
+
+def cmd_upcoming(args) -> None:
+    """Show reviews due in the next N days."""
+    state = store.load()
+    now = sch.utcnow()
+    days = args.days or 14
+    upcoming = sch.upcoming_reviews(state, now, days)
+    if not upcoming:
+        print(f"No reviews due in the next {days} days.")
+        return
+    by_slug = {p["slug"]: p for p in sch.bank()}
+    print(f"{'due':<12} {'slug':<30} {'topic':<28} {'diff':<6}")
+    for due_dt, slug in upcoming:
+        p = by_slug.get(slug)
+        if not p:
+            continue
+        due_str = due_dt.astimezone().strftime("%m-%d %H:%M") if due_dt <= now else due_dt.astimezone().strftime("%m-%d")
+        if due_dt <= now:
+            due_str += " (overdue)"
+        print(f"{due_str:<12} {slug:<30} {p['topic']:<28} {p['difficulty']:<6}")
 
 
 def _ask_solved(prob: dict, elapsed: float) -> bool:
@@ -533,6 +556,30 @@ def cmd_check(args) -> None:
     if passed < total:
         sys.exit(1)
 
+
+def cmd_review(args) -> None:
+    """Run the full test suite for a problem without grading (no FSRS impact)."""
+    state = store.load()
+    slug = args.slug or (state["session"] or {}).get("slug") or state.get("last")
+    if not slug:
+        sys.exit("pass a problem id (e.g. `two-sum`), run during an active session, or grade something first")
+    path = Path(os.environ.get("GRIND_SOLUTIONS", "solutions")) / f"{slug}.py"
+    if not path.exists():
+        sys.exit(f"no solution file: {path}")
+    try:
+        mod = _load_solution(path)
+        tests = getattr(mod, "TESTS", None)
+    except Exception as e:
+        sys.exit(f"error loading {path}: {type(e).__name__}: {e}")
+    if problems._solution_class(mod) is None:
+        sys.exit(f"define your solution class in {path}")
+    if not tests:
+        sys.exit(f"add TESTS = [((args...), expected), ...] to {path}")
+    print(f"reviewing {slug} ({len(tests)} case(s))")
+    passed, total = problems.run_tests(mod, tests, slug)
+    print(f"{passed}/{total} passed" + ("" if passed == total else " — fix and re-run"))
+    if passed < total:
+        sys.exit(1)
 
 
 def _scripts_root() -> Path:
@@ -630,7 +677,28 @@ def cmd_stats(args) -> None:
         print(f"  rating      {r0:.2f} -> {r1:.2f}")
         print(f"  solve rate  {s0*100:.0f}% -> {s1*100:.0f}%")
         print(f"  pace        {p0:.2f}x -> {p1:.2f}x of target time")
+
     act = sch.activity_by_day(state)
+
+    # by difficulty
+    bank = sch.bank()
+    last_solved: dict[str, bool] = {}
+    solved_attempts: dict[str, int] = {}
+    for entry in state.get("logs", []):
+        last_solved[entry["slug"]] = entry.get("solved", False)
+        if entry.get("solved"):
+            solved_attempts[entry["slug"]] = solved_attempts.get(entry["slug"], 0) + 1
+    print("by difficulty:")
+    for diff in ("Easy", "Medium", "Hard"):
+        diff_slugs = [p["slug"] for p in bank if p["difficulty"] == diff]
+        if not diff_slugs:
+            continue
+        ready_vals = [sch.readiness(state, s, now) for s in diff_slugs]
+        avg_ready = sum(ready_vals) / len(ready_vals) * 100
+        proven = sum(1 for s in diff_slugs if last_solved.get(s))
+        distinct_solved = sum(1 for s in diff_slugs if s in solved_attempts)
+        total_att = sum(solved_attempts.get(s, 0) for s in diff_slugs)
+        print(f"  {diff:<6} ready {avg_ready:>5.0f}%  proven {proven:>2}/{len(diff_slugs):<2}  solved {distinct_solved:>2} att {total_att:>3}")
     days = [(now.astimezone().date() - timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
     counts = [act.get(d, 0) for d in days]
     peak = max(counts, default=0)
@@ -638,6 +706,30 @@ def cmd_stats(args) -> None:
     spark = "".join(bars[1 + int(c / peak * 7)] if c else "·" for c in counts)
     print(f"last 14 days   {spark}")
     print(f"               peak {peak} attempts/day")
+
+    # 12-week heatmap (84 days)
+    heatmap_days = [(now.astimezone().date() - timedelta(days=i)).isoformat() for i in range(83, -1, -1)]
+    heatmap_counts = [act.get(d, 0) for d in heatmap_days]
+    heatmap_peak = max(heatmap_counts, default=0)
+    heatmap_bars = " ▁▂▃▄▅▆▇█"
+    print()
+    print("last 12 weeks:")
+    for w in range(12):
+        week_counts = heatmap_counts[w*7:(w+1)*7]
+        week_start = heatmap_days[w*7]
+        week_label = week_start[:10]  # YYYY-MM-DD
+        week_bars = "".join(heatmap_bars[1 + int(c / heatmap_peak * 7)] if c and heatmap_peak else "·" for c in week_counts)
+        print(f"  {week_label}  {week_bars}")
+    if heatmap_peak:
+        print(f"               · none {heatmap_bars[1:]} peak {heatmap_peak}/day")
+
+
+PRESETS = {
+    "intensive": {"daily_new": 8, "retention_target": 0.95, "auto_edit": True},
+    "casual": {"daily_new": 2, "retention_target": 0.85, "auto_edit": False},
+    "maintenance": {"daily_new": 0, "retention_target": 0.9, "auto_edit": False},
+}
+
 
 def cmd_config(args) -> None:
     state = store.load()
@@ -647,6 +739,27 @@ def cmd_config(args) -> None:
         return
     key, _, val = args.set.partition("=")
     key = key.strip()
+    # Handle preset=<name>
+    if key == "preset":
+        if val not in PRESETS:
+            sys.exit(f"Unknown preset: {val}. Valid: {', '.join(PRESETS.keys())}")
+        for pk, pv in PRESETS[val].items():
+            if pk not in state["config"]:
+                sys.exit(f"Preset key {pk} not a valid config key")
+            # Reuse the same validation logic
+            default = state["config"][pk]
+            if isinstance(default, bool):
+                if str(pv).lower() not in ("true", "false"):
+                    sys.exit(f"{pk} must be true or false")
+                state["config"][pk] = str(pv).lower() == "true"
+            elif isinstance(default, (int, float)):
+                state["config"][pk] = pv
+            else:
+                state["config"][pk] = pv
+        store.save(state)
+        for pk, pv in PRESETS[val].items():
+            print(f"{pk} = {pv}")
+        return
     if key not in state["config"]:
         sys.exit(f"Unknown config key: {key}")
     default = state["config"][key]
@@ -1153,7 +1266,11 @@ def main(argv=None) -> None:
     p.add_argument("--due", action="store_true", help="show only due problems")
     p.add_argument("--new", action="store_true", help="show only new (unseen) problems")
     p.add_argument("--proven", action="store_true", help="show only proven problems")
+    p.add_argument("--difficulty", choices=["Easy", "Medium", "Hard"], help="filter by difficulty")
     p.set_defaults(fn=cmd_list)
+    p = sub.add_parser("upcoming", help="show reviews due in the next N days")
+    p.add_argument("--days", type=int, default=14, help="look ahead N days (default 14)")
+    p.set_defaults(fn=cmd_upcoming)
     p = sub.add_parser("done", help="stop timer, grade, schedule next rep")
     p.add_argument("--solved", action="store_true", default=None, help="you solved it (skips prompt)")
     p.add_argument("--fail", dest="solved", action="store_false", default=None, help="you did not solve it")
@@ -1167,6 +1284,9 @@ def main(argv=None) -> None:
     p.add_argument("--n", type=int, help="run the first N case(s)")
     p.add_argument("--all", action="store_true", help="run the full set")
     p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("review", help="run full test suite for a problem without grading (no FSRS impact)")
+    p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
+    p.set_defaults(fn=cmd_review)
     p = sub.add_parser("reference", help="print this problem's verified reference solution — how each edge case's expected value was computed")
     p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
     p.set_defaults(fn=cmd_reference)

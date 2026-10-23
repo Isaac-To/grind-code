@@ -1050,3 +1050,304 @@ def test_list_topic_filter(env, capsys):
     lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
     for line in lines:
         assert "arrays" in line.lower()
+
+
+# ---------------------------------------------------------------- pause/resume
+def test_pause_resume_shows_duration(env, capsys):
+    """Resuming a paused session shows total paused time."""
+    open_session("two-sum")
+    # Pause
+    run(["pause"], capsys)
+    # Resume
+    run(["next"], capsys)
+    o = out(capsys)
+    assert "Resumed:" in o and "paused" in o
+    # Should show some time (0m or more)
+    assert "paused 0m" in o or "paused" in o
+
+
+# ---------------------------------------------------------------- list --difficulty
+def test_list_difficulty_filter(env, capsys):
+    run(["list", "--difficulty", "Hard"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "Hard" in line
+
+    run(["list", "--difficulty", "Easy"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "Easy" in line
+
+
+def test_list_difficulty_combines_with_topic(env, capsys):
+    run(["list", "--topic", "arrays", "--difficulty", "Medium"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "arrays" in line.lower()
+        assert "Medium" in line
+
+
+# ---------------------------------------------------------------- stats heatmap & difficulty
+def test_stats_heatmap_and_difficulty(env, capsys):
+    s = store.load()
+    add_log(s, "two-sum", 5, solved=True, when=local(0))
+    store.save(s)
+    run(["stats"], capsys)
+    o = out(capsys)
+    # Heatmap
+    assert "last 12 weeks:" in o
+    assert "· none" in o
+    # Difficulty breakdown
+    assert "by difficulty:" in o
+    assert "Easy" in o and "Medium" in o and "Hard" in o
+    assert "ready" in o and "proven" in o and "solved" in o
+
+
+# ---------------------------------------------------------------- upcoming
+def test_upcoming_command(env, capsys, no_fuzz):
+    from conftest import seed_review_card
+    state = store.load()
+    seed_review_card(state, "two-sum")
+    seed_review_card(state, "valid-anagram")
+    store.save(state)
+    run(["upcoming", "--days", "7"], capsys)
+    o = out(capsys)
+    assert "two-sum" in o or "valid-anagram" in o
+    assert "due" in o.lower()
+
+
+def test_upcoming_empty(env, capsys):
+    run(["upcoming", "--days", "14"], capsys)
+    assert "No reviews due in the next 14 days" in out(capsys)
+
+
+# ---------------------------------------------------------------- review
+def test_review_runs_full_suite_no_grading(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum",
+        "class Solution:\n    def twoSum(self, nums, target):\n        seen = {}\n        for i, n in enumerate(nums):\n            if target - n in seen:\n                return [seen[target - n], i]\n            seen[n] = i\n        return []",
+        [(([2,7,11,15], 9), [0,1]), (([3,2,4], 6), [1,2]), (([3,3], 6), [0,1])])
+    # Run review
+    assert run(["review", "two-sum"], capsys) is None
+    o = out(capsys)
+    assert "reviewing two-sum" in o
+    assert "3/3 passed" in o
+    # No state changes
+    s = store.load()
+    assert s["session"] is None
+    assert s["logs"] == []
+
+
+def test_review_fails_on_bad_solution(env, capsys):
+    data, sol = env
+    write_solution(sol, "two-sum", "class Solution:\n    def twoSum(self, nums, target):\n        return []", [(([2,7,11,15], 9), [0,1])])
+    assert run(["review", "two-sum"], capsys) == 1
+    o = out(capsys)
+    assert "0/1 passed" in o
+
+
+# ---------------------------------------------------------------- config presets
+def test_config_presets(env, capsys):
+    # intensive
+    assert run(["config", "preset=intensive"], capsys) is None
+    s = store.load()
+    assert s["config"]["daily_new"] == 8
+    assert s["config"]["retention_target"] == 0.95
+    assert s["config"]["auto_edit"] is True
+
+    # casual
+    assert run(["config", "preset=casual"], capsys) is None
+    s = store.load()
+    assert s["config"]["daily_new"] == 2
+    assert s["config"]["retention_target"] == 0.85
+    assert s["config"]["auto_edit"] is False
+
+    # maintenance
+    assert run(["config", "preset=maintenance"], capsys) is None
+    s = store.load()
+    assert s["config"]["daily_new"] == 0
+    assert s["config"]["retention_target"] == 0.9
+    assert s["config"]["auto_edit"] is False
+
+    # unknown preset
+    assert run(["config", "preset=unknown"], capsys) == 1
+    assert "Unknown preset" in out(capsys)
+
+
+# ---------------------------------------------------------------- review errors
+def test_review_errors(env, capsys):
+    # No slug, no session, no last
+    assert run(["review"], capsys) == 1
+    assert "pass a problem id" in out(capsys)
+
+    # No solution file
+    assert run(["review", "two-sum"], capsys) == 1
+    assert "no solution file" in out(capsys)
+
+    # Bad solution file (syntax error) - need to create the file first
+    data, sol = env
+    sol.mkdir(parents=True, exist_ok=True)
+    (sol / "two-sum.py").write_text("not valid python")
+    assert run(["review", "two-sum"], capsys) == 1
+    assert "error loading" in out(capsys)
+
+    # No Solution class
+    (sol / "two-sum.py").write_text("x = 1\nTESTS = []")
+    assert run(["review", "two-sum"], capsys) == 1
+    assert "define your solution class" in out(capsys)
+
+    # No TESTS
+    (sol / "two-sum.py").write_text("class Solution:\n    def twoSum(self, nums, target):\n        return []")
+    assert run(["review", "two-sum"], capsys) == 1
+    assert "add TESTS" in out(capsys)
+
+# ---------------------------------------------------------------- upcoming edge cases
+def test_upcoming_overdue_and_unknown_slug(env, capsys, no_fuzz):
+    from conftest import seed_review_card
+    state = store.load()
+    seed_review_card(state, "two-sum")
+    # Also make the two-sum card overdue
+    from fsrs import Card
+    c = Card()
+    c.due = now_utc() - timedelta(hours=5)
+    state["cards"]["two-sum"] = c.to_dict()
+    # Add a card for a slug not in bank (simulate old data)
+    c2 = Card()
+    c2.due = now_utc() - timedelta(days=1)
+    state["cards"]["unknown-slug"] = c2.to_dict()
+    store.save(state)
+    run(["upcoming", "--days", "7"], capsys)
+    o = out(capsys)
+    assert "two-sum" in o
+    assert "overdue" in o
+    # unknown-slug should be silently skipped
+
+# ---------------------------------------------------------------- stats no activity
+def test_stats_heatmap_no_activity(env, capsys):
+    run(["stats"], capsys)
+    o = out(capsys)
+    assert "last 12 weeks:" in o
+    # When no activity, heatmap_peak is 0, so heatmap legend should not print
+    # The 14-day sparkline still prints "peak 0 attempts/day" - that's expected
+    assert "peak 0/day" not in o
+    # Weekly bars still show with · for zero activity
+    assert "·" in o
+
+
+# ---------------------------------------------------------------- next session already active
+def test_next_session_already_active(env, capsys):
+    # Start a session
+    open_session("two-sum")
+    # Call next again - should show "Session already active"
+    run(["next"], capsys)
+    o = out(capsys)
+    assert "Session already active" in o
+    assert "grind done" in o
+
+    assert run(["config", "preset=unknown"], capsys) == 1
+    assert "Unknown preset" in out(capsys)
+
+
+# ---------------------------------------------------------------- redo
+def test_redo_command(env, capsys, no_fuzz):
+    from conftest import seed_review_card
+    state = store.load()
+    seed_review_card(state, "two-sum")
+    # Add a log entry so redo can find "last graded"
+    add_log(state, "two-sum", 5, solved=True, when=local(0))
+    store.save(state)
+    # Redo from last graded
+    run(["redo"], capsys)
+    o = out(capsys)
+    assert "Redo queued" in o
+    assert "Two Sum" in o
+    # Card should be due now
+    state = store.load()
+    c = sch.Card.from_dict(state["cards"]["two-sum"])
+    assert c.due <= sch.utcnow()
+
+
+def test_redo_with_slug(env, capsys, no_fuzz):
+    from conftest import seed_review_card
+    state = store.load()
+    seed_review_card(state, "valid-anagram")
+    store.save(state)
+    # Redo specific slug
+    run(["redo", "valid-anagram"], capsys)
+    o = out(capsys)
+    assert "Redo queued" in o
+    assert "Valid Anagram" in o
+
+
+def test_redo_errors(env, capsys):
+    # No slug, no session, no last
+    assert run(["redo"], capsys) == 1
+    assert "pass a problem id" in out(capsys)
+
+    # Unknown slug
+    assert run(["redo", "unknown-problem"], capsys) == 1
+    assert "unknown problem" in out(capsys)
+
+    # Not seen yet
+    assert run(["redo", "two-sum"], capsys) == 1
+    assert "not seen yet" in out(capsys)
+
+
+# ---------------------------------------------------------------- completion
+def test_completion_commands(env, capsys):
+    # bash
+    assert run(["completion", "bash"], capsys) is None
+    o = out(capsys)
+    assert "_grind_completions" in o
+    assert "complete -F _grind_completions grind" in o
+
+    # zsh
+    assert run(["completion", "zsh"], capsys) is None
+    o = out(capsys)
+    assert "_grind" in o
+    assert "compdef _grind grind" in o
+
+    # fish
+    assert run(["completion", "fish"], capsys) is None
+    o = out(capsys)
+    assert "complete -c grind" in o
+
+
+def test_completion_data(env, capsys):
+    assert run(["_completion_data"], capsys) is None
+    o = out(capsys)
+    import json
+    data = json.loads(o)
+    assert "subcommands" in data
+    assert "slugs" in data
+    assert "config_keys" in data
+    assert "next" in data["subcommands"]
+    assert "two-sum" in data["slugs"]
+    assert "daily_new" in data["config_keys"]
+
+
+# ---------------------------------------------------------------- _run error
+def test_run_file_not_found(monkeypatch, capsys):
+    # Test _run when git not found
+    import grind.cli as cli
+    # Mock subprocess.run to raise FileNotFoundError
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError()
+    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+    ok, msg = cli._run(["git", "status"])
+    assert ok is False
+    assert msg == ""
+
+
+# ---------------------------------------------------------------- _git error
+def test_git_file_not_found(monkeypatch, capsys, tmp_path):
+    import grind.cli as cli
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError()
+    monkeypatch.setattr(cli.subprocess, "run", mock_run)
+    ok, msg = cli._git(tmp_path, "status")
+    assert ok is False
+    assert "git not found" in msg

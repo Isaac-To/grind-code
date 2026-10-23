@@ -90,6 +90,19 @@ def due_reviews(state: dict, now: datetime) -> list[str]:
     return [s for _, s in sorted(out)]
 
 
+def upcoming_reviews(state: dict, now: datetime, days: int = 14) -> list[tuple[datetime, str]]:
+    """Reviews due within the next `days` days, sorted by due date.
+
+    Returns list of (due_datetime, slug) for cards where due <= now + days.
+    """
+    cutoff = now + timedelta(days=days)
+    out = []
+    for slug, d in state["cards"].items():
+        c = Card.from_dict(d)
+        if c.due <= cutoff:
+            out.append((c.due, slug))
+    return sorted(out)
+
 def mark_due_now(state: dict, slug: str, now: datetime) -> bool:
     """Mark a problem's card as due now (just past due).
 
