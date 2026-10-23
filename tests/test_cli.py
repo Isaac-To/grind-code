@@ -764,6 +764,44 @@ def test_topic_detail(env, capsys):
     # Unknown topic
     run(["topic", "nonexistent"], capsys)
     assert "No problems found for topic matching 'nonexistent'" in out(capsys)
+def test_topic_difficulty_filter(env, capsys):
+    """topic --difficulty filters by difficulty."""
+    run(["topic", "arrays", "--difficulty", "Easy"], capsys)
+    o = out(capsys)
+    assert "Topic: Arrays & Hashing" in o
+    # Only Easy problems
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("Topic:") and not l.startswith("slug")]
+    for line in lines:
+        assert "Easy" in line
+    assert "two-sum" in o
+    assert "valid-anagram" in o
+    assert "contains-duplicate" in o
+    # Medium not shown
+    assert "group-anagrams" not in o
+
+    run(["topic", "arrays", "--difficulty", "Medium"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("Topic:") and not l.startswith("slug")]
+    for line in lines:
+        assert "Medium" in line
+    assert "group-anagrams" in o
+    assert "two-sum" not in o
+
+    run(["topic", "arrays", "--difficulty", "Hard"], capsys)
+    o = out(capsys)
+    assert "No Hard problems found for topic matching 'arrays'" in o
+
+def test_topic_difficulty_combines_with_topic(env, capsys):
+    """topic with different topics and difficulties."""
+    # Two Pointers has Easy (valid-palindrome)
+    run(["topic", "Two Pointers", "--difficulty", "Easy"], capsys)
+    o = out(capsys)
+    assert "valid-palindrome" in o
+    assert "Two Pointers" in o
+    # Sliding Window has Medium problems
+    run(["topic", "Sliding Window", "--difficulty", "Medium"], capsys)
+    o = out(capsys)
+    assert "Medium" in o
 def test_export_command(env, capsys):
     """export outputs JSON by default and CSV with --csv."""
     s = store.load()
@@ -799,6 +837,99 @@ def test_export_command(env, capsys):
     # Cannot specify both
     run(["export", "--json", "--csv"], capsys)
     assert "Cannot specify both --json and --csv" in out(capsys)
+def test_export_since_until(env, capsys):
+    """export --since/--until filters logs and activity by date."""
+    from conftest import add_log, local
+    import json
+    from datetime import datetime, timedelta
+    s = store.load()
+    # Add logs at different dates (using local() which is relative to now)
+    add_log(s, "two-sum", 10, solved=True, rating=3.5, when=local(10))   # 10 days ago
+    add_log(s, "valid-palindrome", 15, solved=True, rating=3.0, when=local(5))  # 5 days ago
+    add_log(s, "two-sum", 12, solved=False, rating=2.0, when=local(0))  # today
+    store.save(s)
+
+    # Calculate date strings for filtering
+    today = datetime.now().astimezone().date()
+    day_10 = (today - timedelta(days=10)).isoformat()
+    day_5 = (today - timedelta(days=5)).isoformat()
+    day_0 = today.isoformat()
+    day_7 = (today - timedelta(days=7)).isoformat()
+    day_3 = (today - timedelta(days=3)).isoformat()
+
+    # Export with --since day 7 (should include day 5 and day 0)
+    run(["export", "--since", day_7], capsys)
+    o = out(capsys)
+    data = json.loads(o)
+    assert len(data["logs"]) == 2
+    slugs = [e["slug"] for e in data["logs"]]
+    assert "valid-palindrome" in slugs
+    assert "two-sum" in slugs
+    # day 10 should be excluded
+    assert not any(e["slug"] == "two-sum" and e.get("elapsed") == 10.0 for e in data["logs"])
+    # Activity should only have day 5 and day 0
+    assert day_5 in data["activity_by_day"]
+    assert day_0 in data["activity_by_day"]
+    assert day_10 not in data["activity_by_day"]
+
+    # Export with --until day 3 (should include day 5 and day 10)
+    run(["export", "--until", day_3], capsys)
+    o = out(capsys)
+    data = json.loads(o)
+    assert len(data["logs"]) == 2
+    slugs = [e["slug"] for e in data["logs"]]
+    assert "two-sum" in slugs
+    assert "valid-palindrome" in slugs
+    assert day_10 in data["activity_by_day"]
+    assert day_5 in data["activity_by_day"]
+    assert day_0 not in data["activity_by_day"]
+
+    # Export with --since and --until (day 7 to day 3, only day 5)
+    run(["export", "--since", day_7, "--until", day_3], capsys)
+    o = out(capsys)
+    data = json.loads(o)
+    assert len(data["logs"]) == 1
+    assert data["logs"][0]["slug"] == "valid-palindrome"
+    assert list(data["activity_by_day"].keys()) == [day_5]
+    # CSV export with date filter
+    run(["export", "--csv", "--since", day_7, "--until", day_3], capsys)
+    o = out(capsys)
+    lines = o.strip().split("\n")
+    assert len(lines) == 2  # header + 1 data row
+    assert "valid-palindrome" in lines[1]
+
+    # Invalid date format
+    assert run(["export", "--since", "invalid"], capsys) == 1
+    assert "Invalid --since date" in out(capsys)
+    assert run(["export", "--until", "not-a-date"], capsys) == 1
+    assert "Invalid --until date" in out(capsys)
+
+
+def test_export_invalid_dates_in_logs(env, capsys):
+    """export handles invalid timestamps gracefully."""
+    import json
+    s = store.load()
+    # Add a valid log
+    add_log(s, "two-sum", 10, solved=True, rating=3.5, when=local(0))
+    # Manually add logs with invalid/missing timestamps
+    s["logs"].append({"slug": "valid-palindrome", "rating": 3.0, "solved": True, "elapsed": 5.0})
+    s["logs"].append({"slug": "reverse-linked-list", "ts": "not-a-date", "rating": 2.5, "solved": True, "elapsed": 3.0})
+    # Add invalid activity day
+    s["activity_by_day"] = s.get("activity_by_day", {})
+    s["activity_by_day"]["invalid-date"] = 5
+    store.save(s)
+
+    # Export should not crash and should include the valid log
+    run(["export"], capsys)
+    o = out(capsys)
+    data = json.loads(o)
+    # Should have the valid log (two-sum)
+    assert any(e["slug"] == "two-sum" for e in data["logs"])
+    # Invalid timestamp logs should be skipped
+    assert not any(e["slug"] == "valid-palindrome" for e in data["logs"])
+    assert not any(e["slug"] == "reverse-linked-list" for e in data["logs"])
+    # Invalid activity day should be skipped
+    assert "invalid-date" not in data["activity_by_day"]
 
 def test_stats_layout(env, capsys):
     s = store.load()
@@ -855,6 +986,41 @@ def test_config_show_and_set(env, capsys):
     assert run(["config", "auto_edit=maybe"], capsys) == 1
     assert "must be true or false" in out(capsys)
 
+def test_config_show_descriptions(env, capsys):
+    """config shows descriptions for known keys."""
+    run(["config"], capsys)
+    o = out(capsys)
+    assert "daily_new = 5  # max new problems introduced per day" in o
+    assert "retention_target = 0.9  # FSRS desired retention probability" in o
+    assert "auto_web = False  # open problem page in browser on grind next" in o
+    assert "auto_edit = False  # open scaffold in $EDITOR on grind next" in o
+    assert "backup_remote =   # git URL of backup repo" in o
+    assert "update_check = True  # check for updates daily" in o
+    assert "targets = {'Easy': 15, 'Medium': 30, 'Hard': 45}  # personal fluency targets per difficulty (min)" in o
+
+def test_config_reset(env, capsys):
+    """--reset restores all config to defaults."""
+    run(["config", "daily_new=8"], capsys)
+    run(["config", "retention_target=0.95"], capsys)
+    run(["config", "auto_edit=true"], capsys)
+    s = store.load()
+    assert s["config"]["daily_new"] == 8
+    assert s["config"]["retention_target"] == 0.95
+    assert s["config"]["auto_edit"] is True
+
+    run(["config", "--reset"], capsys)
+    s = store.load()
+    assert s["config"]["daily_new"] == 5
+    assert s["config"]["retention_target"] == 0.9
+    assert s["config"]["auto_edit"] is False
+    assert s["config"]["auto_web"] is False
+    assert s["config"]["backup_remote"] == ""
+    assert s["config"]["update_check"] is True
+    assert s["config"]["targets"] == {"Easy": 15, "Medium": 30, "Hard": 45}
+
+    # --reset cannot be combined with key=value
+    assert run(["config", "--reset", "daily_new=3"], capsys) == 1
+    assert "cannot combine --reset with key=value" in out(capsys)
 
 # ---------------------------------------------------------------- entry
 
@@ -1066,6 +1232,102 @@ def test_log_all_flag(env, capsys, no_fuzz):
     run(["log", "--all"], capsys)
     lines = [l for l in out(capsys).splitlines() if "contains-duplicate" in l]
     assert len(lines) == 2
+def test_log_slug_filter(env, capsys, no_fuzz):
+    data, sol = env
+    # Grade two-sum
+    open_session("two-sum")
+    write_solution(sol, "two-sum", TWO_SUM_BODY,
+                   [(([2, 7, 11, 15], 9), [0, 1])])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    # Grade contains-duplicate
+    open_session("contains-duplicate")
+    write_solution(sol, "contains-duplicate", SOLVED_BODY,
+                   [(([1, 2, 3, 1],), True), (([1, 2, 3, 4],), False)])
+    run(["done", "--solved", "--mins", "5"], capsys)
+
+    run(["log", "--slug", "two-sum"], capsys)
+    # Extract only log lines (format: YYYY-MM-DD HH:MM  slug  ...)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "two-sum" in log_output
+    assert "contains-duplicate" not in log_output
+
+    run(["log", "--slug", "invalid-slug"], capsys)
+    assert "No matching history." in out(capsys)
+
+
+def test_log_topic_filter(env, capsys, no_fuzz):
+    data, sol = env
+    # two-sum is "arrays" topic, contains-duplicate is "arrays" topic, binary-search is "binary-search"
+    open_session("two-sum")
+    write_solution(sol, "two-sum", TWO_SUM_BODY,
+                   [(([2, 7, 11, 15], 9), [0, 1])])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    open_session("binary-search")
+    write_solution(sol, "binary-search", "class Solution:\n    def search(self, nums, target):\n        return -1",
+                   [(([-1, 0, 3, 5, 9, 12], 9), 4)])
+    run(["done", "--solved", "--mins", "8"], capsys)
+
+    run(["log", "--topic", "arrays"], capsys)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "two-sum" in log_output
+    assert "binary-search" not in log_output
+
+    run(["log", "--topic", "binary"], capsys)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "binary-search" in log_output
+    assert "two-sum" not in log_output
+
+
+def test_log_difficulty_filter(env, capsys, no_fuzz):
+    data, sol = env
+    # two-sum is Easy, product-of-array-except-self is Medium
+    open_session("two-sum")
+    write_solution(sol, "two-sum", TWO_SUM_BODY,
+                   [(([2, 7, 11, 15], 9), [0, 1])])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    open_session("product-of-array-except-self")
+    write_solution(sol, "product-of-array-except-self", "class Solution:\n    def productExceptSelf(self, nums):\n        return [1]",
+                   [(([1, 2, 3, 4],), [24, 12, 8, 6])])
+    run(["done", "--solved", "--mins", "8"], capsys)
+
+    run(["log", "--difficulty", "Easy"], capsys)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "two-sum" in log_output
+    assert "product-of-array-except-self" not in log_output
+
+    run(["log", "--difficulty", "Medium"], capsys)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "product-of-array-except-self" in log_output
+    assert "two-sum" not in log_output
+
+
+def test_log_combined_filters(env, capsys, no_fuzz):
+    data, sol = env
+    open_session("two-sum")
+    write_solution(sol, "two-sum", TWO_SUM_BODY,
+                   [(([2, 7, 11, 15], 9), [0, 1])])
+    run(["done", "--solved", "--mins", "10"], capsys)
+    # two-sum-ii-input-array-is-sorted is Medium and in "Two Pointers" topic
+    open_session("two-sum-ii-input-array-is-sorted")
+    write_solution(sol, "two-sum-ii-input-array-is-sorted", "class Solution:\n    def twoSum(self, numbers, target):\n        return [1, 2]",
+                   [(([2, 7, 11, 15], 9), [1, 2])])
+    run(["done", "--solved", "--mins", "8"], capsys)
+
+    # topic arrays + difficulty Easy should match two-sum only
+    run(["log", "--topic", "arrays", "--difficulty", "Easy"], capsys)
+    log_lines = [l for l in out(capsys).splitlines() if l.strip() and l[0].isdigit()]
+    log_output = "\n".join(log_lines)
+    assert "two-sum" in log_output
+    assert "two-sum-ii-input-array-is-sorted" not in log_output
+
+    # topic arrays + difficulty Medium should match nothing (two-sum-ii is in Two Pointers, not arrays)
+    run(["log", "--topic", "arrays", "--difficulty", "Medium"], capsys)
+    assert "No matching history." in out(capsys)
 
 # ---------------------------------------------------------------- list
 
@@ -1347,6 +1609,65 @@ def test_stats_heatmap_no_activity(env, capsys):
     assert "peak 0/day" not in o
     # Weekly bars still show with · for zero activity
     assert "·" in o
+def test_stats_shows_time_tracking(env, capsys, no_fuzz):
+    """stats shows time investment breakdown."""
+    from conftest import add_log, local
+    s = store.load()
+    # Add logs with known elapsed times for different difficulties and topics
+    # two-sum: Easy, Arrays & Hashing
+    add_log(s, "two-sum", 10, solved=True, when=local(0))
+    add_log(s, "two-sum", 15, solved=True, when=local(1))
+    # valid-anagram: Easy, Arrays & Hashing
+    add_log(s, "valid-anagram", 20, solved=True, when=local(2))
+    # two-sum-ii-input-array-is-sorted: Medium, Two Pointers
+    add_log(s, "two-sum-ii-input-array-is-sorted", 30, solved=True, when=local(3))
+    # product-of-array-except-self: Medium, Arrays & Hashing
+    add_log(s, "product-of-array-except-self", 25, solved=True, when=local(4))
+    store.save(s)
+
+    run(["stats"], capsys)
+    o = out(capsys)
+    # Total time: (10+15+20+30+25)/60 = 100/60 = 1.67h
+    assert "Time Investment:" in o
+    assert "Total:" in o and "1.7h" in o  # rounded
+    assert "By difficulty:" in o
+    # Easy: (10+15+20)/3 = 15m avg
+    assert "Easy" in o and "15.0m avg" in o
+    # Medium: (30+25)/2 = 27.5m avg
+    assert "Medium" in o and "27.5m avg" in o
+    # Hard: —
+    assert "Hard" in o and "—" in o
+    assert "By topic" in o
+    assert "This week:" in o
+    assert "This month:" in o
+def test_stats_custom_weeks(env, capsys):
+    """stats --weeks N shows correct number of weeks in heatmap."""
+    run(["stats", "--weeks", "4"], capsys)
+    o = out(capsys)
+    assert "last 4 weeks:" in o
+    # Should have 4 weekly lines (format: "  2026-09-26  ·······")
+    week_lines = [l for l in o.splitlines() if l.strip()[:4].isdigit() and l.strip()[4] == "-"]
+    assert len(week_lines) == 4
+
+    run(["stats", "--weeks", "52"], capsys)
+    o = out(capsys)
+    assert "last 52 weeks:" in o
+    week_lines = [l for l in o.splitlines() if l.strip()[:4].isdigit() and l.strip()[4] == "-"]
+    assert len(week_lines) == 52
+
+    # Clamping: --weeks 0 should show 1 week
+    run(["stats", "--weeks", "0"], capsys)
+    o = out(capsys)
+    assert "last 1 weeks:" in o
+    week_lines = [l for l in o.splitlines() if l.strip()[:4].isdigit() and l.strip()[4] == "-"]
+    assert len(week_lines) == 1
+
+    # Clamping: --weeks 100 should show 52 weeks
+    run(["stats", "--weeks", "100"], capsys)
+    o = out(capsys)
+    assert "last 52 weeks:" in o
+    week_lines = [l for l in o.splitlines() if l.strip()[:4].isdigit() and l.strip()[4] == "-"]
+    assert len(week_lines) == 52
 
 
 # ---------------------------------------------------------------- next session already active
@@ -1439,6 +1760,38 @@ def test_completion_data(env, capsys):
     assert "next" in data["subcommands"]
     assert "two-sum" in data["slugs"]
     assert "daily_new" in data["config_keys"]
+    assert "topics" in data
+    assert "Arrays & Hashing" in data["topics"]
+    assert "Two Pointers" in data["topics"]
+    assert "Sliding Window" in data["topics"]
+
+def test_completion_bash_topic(env, capsys):
+    """bash completion includes topics for topic and list --topic."""
+    assert run(["completion", "bash"], capsys) is None
+    o = out(capsys)
+    assert 'topics=' in o  # local topics variable
+    assert 'topic)' in o  # topic command case
+    assert 'list)' in o  # list command case
+    # Check that list handles --topic flag
+    assert 'if [[ "${words[cword-1]}" == "--topic" ]]' in o
+    assert 'COMPREPLY=($(compgen -W "$topics" -- "$cur"))' in o
+
+def test_completion_zsh_topic(env, capsys):
+    """zsh completion includes topic completions."""
+    assert run(["completion", "zsh"], capsys) is None
+    o = out(capsys)
+    assert "topics=" in o  # topics array
+    assert "(topic)" in o  # topic command
+    assert "(list)" in o  # list command
+    assert "topic:($topics)" in o  # --topic flag completion
+
+def test_completion_fish_topic(env, capsys):
+    """fish completion includes topic completions."""
+    assert run(["completion", "fish"], capsys) is None
+    o = out(capsys)
+    assert "__fish_use_subcommand topic" in o
+    assert "__fish_use_subcommand list" in o
+    assert "Arrays" in o and "Hashing" in o
 
 
 # ---------------------------------------------------------------- _run error

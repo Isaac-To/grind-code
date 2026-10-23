@@ -416,6 +416,28 @@ def cmd_log(args) -> None:
     if not logs:
         print("No graded attempts yet.")
         return
+
+    # Filter logs
+    if args.slug or args.topic or args.difficulty:
+        by_slug = sch.by_slug()
+        filtered = []
+        for entry in logs:
+            slug = entry["slug"]
+            if args.slug and slug != args.slug:
+                continue
+            prob = by_slug.get(slug)
+            if not prob:
+                continue
+            if args.topic and args.topic.lower() not in prob.get("topic", "").lower():
+                continue
+            if args.difficulty and prob.get("difficulty") != args.difficulty:
+                continue
+            filtered.append(entry)
+        logs = filtered
+        if not logs:
+            print("No matching history.")
+            return
+
     limit = len(logs) if args.all else (args.n or 20)
     for entry in reversed(logs[-limit:]):
         ts = datetime.fromisoformat(entry["ts"]).strftime("%Y-%m-%d %H:%M")
@@ -720,6 +742,13 @@ def cmd_topic_detail(args) -> None:
         print(f"No problems found for topic matching '{args.topic}'.")
         return
 
+    # Filter by difficulty if specified
+    if args.difficulty:
+        topic_problems = [p for p in topic_problems if p["difficulty"] == args.difficulty]
+        if not topic_problems:
+            print(f"No {args.difficulty} problems found for topic matching '{args.topic}'.")
+            return
+
     # Compute last solved status per slug
     last_solved: dict[str, bool] = {}
     for entry in state.get("logs", []):
@@ -811,14 +840,15 @@ def cmd_stats(args) -> None:
     print(f"last 14 days   {spark}")
     print(f"               peak {peak} attempts/day")
 
-    # 12-week heatmap (84 days)
-    heatmap_days = [(now.astimezone().date() - timedelta(days=i)).isoformat() for i in range(83, -1, -1)]
+    # Heatmap (customizable weeks, clamped 1-52)
+    weeks = max(1, min(52, args.weeks))
+    heatmap_days = [(now.astimezone().date() - timedelta(days=i)).isoformat() for i in range(weeks*7 - 1, -1, -1)]
     heatmap_counts = [act.get(d, 0) for d in heatmap_days]
     heatmap_peak = max(heatmap_counts, default=0)
     heatmap_bars = " ▁▂▃▄▅▆▇█"
     print()
-    print("last 12 weeks:")
-    for w in range(12):
+    print(f"last {weeks} weeks:")
+    for w in range(weeks):
         week_counts = heatmap_counts[w*7:(w+1)*7]
         week_start = heatmap_days[w*7]
         week_label = week_start[:10]  # YYYY-MM-DD
@@ -827,12 +857,64 @@ def cmd_stats(args) -> None:
     if heatmap_peak:
         print(f"               · none {heatmap_bars[1:]} peak {heatmap_peak}/day")
 
+    # Time investment
+    logs = state.get("logs", [])
+    if logs:
+        total_hours = sum(e.get("elapsed", 0.0) for e in logs) / 60.0
+        print()
+        print(f"Time Investment:")
+        print(f"  Total:      {total_hours:.1f}h across {len(logs)} attempts")
+
+        # By difficulty
+        by_slug = sch.by_slug()
+        diff_times: dict[str, list[float]] = {"Easy": [], "Medium": [], "Hard": []}
+        topic_times: dict[str, list[float]] = {}
+        for entry in logs:
+            slug = entry["slug"]
+            elapsed = entry.get("elapsed", 0.0)
+            prob = by_slug.get(slug)
+            if prob:
+                diff = prob.get("difficulty")
+                if diff in diff_times:
+                    diff_times[diff].append(elapsed)
+                topic = prob.get("topic", "Unknown")
+                topic_times.setdefault(topic, []).append(elapsed)
+
+        print("  By difficulty:")
+        for diff in ("Easy", "Medium", "Hard"):
+            times = diff_times[diff]
+            if times:
+                avg = sum(times) / len(times)
+                print(f"    {diff:<6} {avg:.1f}m avg over {len(times)} attempts")
+            else:
+                print(f"    {diff:<6} —")
+
+        # By topic (top 5 by attempt count)
+        print("  By topic (top 5):")
+        top_topics = sorted(topic_times.items(), key=lambda kv: -len(kv[1]))[:5]
+        for topic, times in top_topics:
+            avg = sum(times) / len(times)
+            print(f"    {topic:<28} {avg:.1f}m avg over {len(times)} attempts")
+
+        # This week / this month
+        from datetime import date, timedelta as td
+        today = now.astimezone().date()
+        week_ago = today - td(days=6)
+        month_ago = today - td(days=29)
+        week_min = sum(e.get("elapsed", 0.0) for e in logs
+                       if datetime.fromisoformat(e["ts"]).astimezone().date() >= week_ago)
+        month_min = sum(e.get("elapsed", 0.0) for e in logs
+                        if datetime.fromisoformat(e["ts"]).astimezone().date() >= month_ago)
+        print(f"  This week:  {week_min/60:.1f}h")
+        print(f"  This month: {month_min/60:.1f}h")
+
 def cmd_export(args) -> None:
     """Export progress data as JSON or CSV."""
     import json
     import csv
     import sys
     from io import StringIO
+    from datetime import datetime, date
 
     state = store.load()
     now = sch.utcnow()
@@ -840,6 +922,67 @@ def cmd_export(args) -> None:
     by_slug = {p["slug"]: p for p in bank}
     cards = state.get("cards", {})
     logs = state.get("logs", [])
+
+    # Parse --since and --until dates
+    since_date = None
+    until_date = None
+    if args.since:
+        try:
+            since_date = datetime.fromisoformat(args.since).date()
+        except ValueError:
+            sys.exit(f"Invalid --since date: {args.since}. Use YYYY-MM-DD.")
+    if args.until:
+        try:
+            until_date = datetime.fromisoformat(args.until).date()
+        except ValueError:
+            sys.exit(f"Invalid --until date: {args.until}. Use YYYY-MM-DD.")
+
+    # Filter logs: remove entries with missing/invalid timestamps
+    filtered_logs = []
+    for entry in logs:
+        ts = entry.get("ts", "")
+        if not ts:
+            continue
+        try:
+            datetime.fromisoformat(ts).date()
+        except ValueError:
+            continue
+        filtered_logs.append(entry)
+    logs = filtered_logs
+
+    # Filter logs by date range
+    if since_date or until_date:
+        filtered_logs = []
+        for entry in logs:
+            ts = entry.get("ts", "")
+            try:
+                entry_date = datetime.fromisoformat(ts).date()
+            except ValueError:
+                continue
+            if since_date and entry_date < since_date:
+                continue
+            if until_date and entry_date > until_date:
+                continue
+            filtered_logs.append(entry)
+        logs = filtered_logs
+
+    # Filter activity_by_day by date range
+    activity = sch.activity_by_day(state)
+    if since_date or until_date:
+        filtered_activity = {}
+        for day, count in activity.items():
+            try:
+                day_date = datetime.fromisoformat(day).date()
+            except ValueError:
+                continue
+            if since_date and day_date < since_date:
+                continue
+            if until_date and day_date > until_date:
+                continue
+            filtered_activity[day] = count
+        activity = filtered_activity
+    else:
+        activity = sch.activity_by_day(state)
 
     # Compute readiness and status for each problem
     due_set = set(sch.due_reviews(state, now))
@@ -882,7 +1025,6 @@ def cmd_export(args) -> None:
     cur, best = sch.streaks(state)
     solved, distinct, proven = sch.solved_counts(state)
     readiness_overall = sch.overall_readiness(state, now)
-    activity = sch.activity_by_day(state)
 
     export_data = {
         "exported_at": now.isoformat(),
@@ -944,12 +1086,34 @@ PRESETS = {
     "maintenance": {"daily_new": 0, "retention_target": 0.9, "auto_edit": False},
 }
 
+CONFIG_DESCRIPTIONS = {
+    "daily_new": "max new problems introduced per day",
+    "targets": "personal fluency targets per difficulty (min)",
+    "retention_target": "FSRS desired retention probability",
+    "auto_web": "open problem page in browser on grind next",
+    "auto_edit": "open scaffold in $EDITOR on grind next",
+    "backup_remote": "git URL of backup repo",
+    "update_check": "check for updates daily",
+}
+
 
 def cmd_config(args) -> None:
     state = store.load()
+    # Handle --reset flag
+    if args.reset:
+        if args.set:
+            sys.exit("cannot combine --reset with key=value")
+        state["config"] = dict(store.DEFAULT_CONFIG)
+        store.save(state)
+        print("Config reset to defaults")
+        return
     if not args.set:
         for k, v in state["config"].items():
-            print(f"{k} = {v}")
+            desc = CONFIG_DESCRIPTIONS.get(k)
+            if desc:
+                print(f"{k} = {v}  # {desc}")
+            else:
+                print(f"{k} = {v}")
         return
     key, _, val = args.set.partition("=")
     key = key.strip()
@@ -1263,6 +1427,7 @@ def _completion_script_bash(data: dict) -> str:
         "    _init_completion || return",
         "    local subcommands=\"{}\"".format(" ".join(sorted(data["subcommands"].keys()))),
         "    local slugs=\"{}\"".format(" ".join(data["slugs"])),
+        "    local topics=\"{}\"".format(" ".join(data["topics"])),
         "    local config_keys=\"{}\"".format(" ".join(data["config_keys"])),
         "",
         "    if [[ $cword -eq 1 ]]; then",
@@ -1275,6 +1440,9 @@ def _completion_script_bash(data: dict) -> str:
         "        check|reference|extras|redo)",
         "            COMPREPLY=($(compgen -W \"$slugs\" -- \"$cur\"))",
         "            ;;",
+        "        topic)",
+        "            COMPREPLY=($(compgen -W \"$topics\" -- \"$cur\"))",
+        "            ;;",
         "        config)",
         "            COMPREPLY=($(compgen -W \"$config_keys\" -- \"$cur\"))",
         "            ;;",
@@ -1283,7 +1451,11 @@ def _completion_script_bash(data: dict) -> str:
         "            ;;",
         "        list)",
         "            local list_flags=\"--topic --due --new --proven\"",
-        "            COMPREPLY=($(compgen -W \"$list_flags\" -- \"$cur\"))",
+        "            if [[ \"${words[cword-1]}\" == \"--topic\" ]]; then",
+        "                COMPREPLY=($(compgen -W \"$topics\" -- \"$cur\"))",
+        "            else",
+        "                COMPREPLY=($(compgen -W \"$list_flags\" -- \"$cur\"))",
+        "            fi",
         "            ;;",
         "        log)",
         "            local log_flags=\"--n --all\"",
@@ -1363,10 +1535,10 @@ def _completion_script_zsh(data: dict) -> str:
         "                    _values 'topic' $topics",
         "                    ;;",
         "                (list)",
-        "                    _arguments '--topic[Filter by topic substring]' '--due[Show only due problems]' '--new[Show only new problems]' '--proven[Show only proven problems]'",
+        "                    _arguments '--topic[Filter by topic substring]:topic:($topics)' '--due[Show only due problems]' '--new[Show only new problems]' '--proven[Show only proven problems]',",
         "                    ;;",
         "                (log)",
-        "                    _arguments '--n[Show last N entries]' '--all[Show all entries]'",
+        "                    _arguments '--n[Show last N entries]' '--all[Show all entries]',",
         "                    ;;",
         "                (done)",
         "                    _arguments '--solved[You solved it]' '--fail[You did not solve it]' '--rating[Override rating (1..4)]' '--mins[Override elapsed time (minutes)]'",
@@ -1489,6 +1661,9 @@ def main(argv=None) -> None:
     p = sub.add_parser("log", help="show recent graded attempts")
     p.add_argument("--n", type=int, help="show last N entries (default 20)")
     p.add_argument("--all", action="store_true", help="show all entries")
+    p.add_argument("--slug", help="filter by problem slug")
+    p.add_argument("--topic", help="filter by topic substring")
+    p.add_argument("--difficulty", choices=["Easy", "Medium", "Hard"], help="filter by difficulty")
     p.set_defaults(fn=cmd_log)
     p = sub.add_parser("history", help="show attempt history for a problem")
     p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
@@ -1533,16 +1708,21 @@ def main(argv=None) -> None:
     p.set_defaults(fn=cmd_topics)
     p = sub.add_parser("topic", help="show all problems in a topic with status and readiness")
     p.add_argument("topic", help="topic name (case-insensitive)")
+    p.add_argument("--difficulty", choices=["Easy", "Medium", "Hard"], help="filter by difficulty")
     p.set_defaults(fn=cmd_topic_detail)
     p = sub.add_parser("stats", help="streaks, solved counts, trends, activity")
+    p.add_argument("--weeks", type=int, default=12, help="number of weeks for heatmap (1-52, default 12)")
     p.set_defaults(fn=cmd_stats)
     p = sub.add_parser("export", help="export progress data (JSON or CSV)")
     p.add_argument("--json", action="store_true", help="output as JSON (default)")
     p.add_argument("--csv", action="store_true", help="output as CSV")
     p.add_argument("--output", help="write to file instead of stdout")
+    p.add_argument("--since", help="include only logs/activity from this date (YYYY-MM-DD)")
+    p.add_argument("--until", help="include only logs/activity up to this date (YYYY-MM-DD)")
     p.set_defaults(fn=cmd_export)
     p = sub.add_parser("config", help="show or set config (key=value)")
     p.add_argument("set", nargs="?", help="e.g. daily_new=3")
+    p.add_argument("--reset", action="store_true", help="reset all config to defaults")
     p.set_defaults(fn=cmd_config)
     p = sub.add_parser("backup", help="back up now (automatic after every grind done anyway)")
     p.add_argument("--remote", help="git url to back up to from now on (e.g. your private GitHub repo)")

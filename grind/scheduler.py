@@ -295,7 +295,13 @@ def activity_by_day(state: dict) -> dict[str, int]:
     """Graded attempts per local calendar day ('YYYY-MM-DD' -> count)."""
     out: dict[str, int] = {}
     for l in state["logs"]:
-        d = datetime.fromisoformat(l["ts"]).astimezone().date().isoformat()
+        ts = l.get("ts")
+        if not ts:
+            continue
+        try:
+            d = datetime.fromisoformat(ts).astimezone().date().isoformat()
+        except ValueError:
+            continue
         out[d] = out.get(d, 0) + 1
     return out
 
