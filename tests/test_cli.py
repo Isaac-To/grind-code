@@ -13,6 +13,7 @@ from fsrs import Card
 from grind import cli
 from grind import scheduler as sch
 from grind import store
+from grind import __version__
 
 from conftest import (add_log, local, now_utc, open_session, seed_review_card,
                       write_solution)
@@ -719,6 +720,27 @@ def test_status_after_activity(env, capsys, no_fuzz):
     run(["status"], capsys)
     assert "in session: Contains Duplicate" in out(capsys)
 
+def test_status_streak_at_risk(env, capsys, no_fuzz):
+    """Status shows streak warning when streak > 0 and no activity today."""
+    s = store.load()
+    from grind.scheduler import utcnow
+    from datetime import timedelta
+    # Create a 3-day streak ending yesterday
+    now = utcnow()
+    for i in range(1, 4):
+        add_log(s, "two-sum", 5.0, solved=True, when=now - timedelta(days=i))
+    store.save(s)
+    run(["status"], capsys)
+    o = out(capsys)
+    assert "streak 3d" in o
+    assert "⚠ streak at risk" in o
+    # Now add activity today — warning should disappear
+    add_log(s, "valid-anagram", 5.0, solved=True, when=now)
+    store.save(s)
+    run(["status"], capsys)
+    o = out(capsys)
+    assert "streak 4d" in o  # streak increased
+    assert "⚠ streak at risk" not in o
 
 def test_topics_table(env, capsys):
     run(["topics"], capsys)
@@ -728,6 +750,55 @@ def test_topics_table(env, capsys):
     assert "overall: 0%  (goal 80%)" in o
     assert "ready = you solved the problem last attempt" in o
 
+def test_topic_detail(env, capsys):
+    """topic shows all problems in a topic with status and readiness."""
+    run(["topic", "arrays"], capsys)
+    o = out(capsys)
+    assert "Topic: Arrays & Hashing" in o
+    assert "readiness" in o
+    assert "two-sum" in o
+    assert "valid-anagram" in o
+    # Case insensitive
+    run(["topic", "ARRAYS"], capsys)
+    assert "Arrays & Hashing" in out(capsys)
+    # Unknown topic
+    run(["topic", "nonexistent"], capsys)
+    assert "No problems found for topic matching 'nonexistent'" in out(capsys)
+def test_export_command(env, capsys):
+    """export outputs JSON by default and CSV with --csv."""
+    s = store.load()
+    add_log(s, "two-sum", 10, solved=True, rating=3.5, when=local(0))
+    store.save(s)
+    # JSON export
+    run(["export"], capsys)
+    o = out(capsys)
+    import json
+    data = json.loads(o)
+    assert data["summary"]["proven"] >= 1
+    assert "problems" in data
+    assert "logs" in data
+    assert data["version"] == __version__
+    # CSV export
+    run(["export", "--csv"], capsys)
+    o = out(capsys)
+    assert "timestamp,slug,rating,solved,elapsed_min,tests,new" in o
+    assert "two-sum" in o
+    # Output to file
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        tmp = f.name
+    try:
+        run(["export", "--output", tmp], capsys)
+        assert f"Exported to {tmp}" in out(capsys)
+        with open(tmp) as f:
+            data = json.load(f)
+        assert data["summary"]["proven"] >= 1
+    finally:
+        import os
+        os.unlink(tmp)
+    # Cannot specify both
+    run(["export", "--json", "--csv"], capsys)
+    assert "Cannot specify both --json and --csv" in out(capsys)
 
 def test_stats_layout(env, capsys):
     s = store.load()
@@ -1089,7 +1160,48 @@ def test_list_difficulty_combines_with_topic(env, capsys):
         assert "arrays" in line.lower()
         assert "Medium" in line
 
+def test_list_search_filter(env, capsys):
+    """--search filters by keyword in slug or title."""
+    run(["list", "--search", "two"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    assert len(lines) > 0
+    for line in lines:
+        assert "two" in line.lower()
+    # Combined with difficulty
+    run(["list", "--search", "sum", "--difficulty", "Easy"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip() and not l.startswith("slug")]
+    for line in lines:
+        assert "sum" in line.lower()
+        assert "Easy" in line
 
+# ---------------------------------------------------------------- history
+def test_history_command(env, capsys):
+    """history shows chronological attempt log for a slug."""
+    s = store.load()
+    from grind.scheduler import utcnow
+    from datetime import timedelta
+    now = utcnow()
+    add_log(s, "two-sum", 12.5, solved=True, rating=3.2, when=now - timedelta(days=7))
+    add_log(s, "two-sum", 25.0, solved=False, rating=2.8, when=now - timedelta(days=4))
+    add_log(s, "two-sum", 8.2, solved=True, rating=3.6, when=now - timedelta(days=1))
+    # Add tests field manually (not in add_log helper)
+    s["logs"][-3]["tests"] = 15
+    s["logs"][-2]["tests"] = 12
+    s["logs"][-1]["tests"] = 15
+    store.save(s)
+    run(["history", "two-sum"], capsys)
+    o = out(capsys)
+    lines = [l for l in o.splitlines() if l.strip()]
+    assert len(lines) == 3
+    assert "solved=yes" in lines[0]
+    assert "solved=no" in lines[1]
+    assert "solved=yes" in lines[2]
+    # Unknown slug
+    run(["history", "invalid-slug"], capsys)
+    o = out(capsys)
+    assert "No history for invalid-slug" in o
 # ---------------------------------------------------------------- stats heatmap & difficulty
 def test_stats_heatmap_and_difficulty(env, capsys):
     s = store.load()

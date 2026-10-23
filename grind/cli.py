@@ -43,7 +43,7 @@ grind config update_check=false turns the check off.
 DIFF_COLOR = {"Easy": "\033[32m", "Medium": "\033[33m", "Hard": "\033[31m"}
 RESET = "\033[0m"
 BOLD = "\033[1m"
-
+YELLOW = "\033[33m"
 
 def url(slug: str) -> str:
     return f"https://leetcode.com/problems/{slug}/"
@@ -271,15 +271,34 @@ def cmd_help(args) -> None:
     print("Inspect & learn:")
     print("  grind status    one-line progress snapshot (readiness, streak, due)")
     print("  grind topics    per-topic readiness breakdown")
-    print("  grind stats     streaks, solved counts, trends, activity")
+    print("  grind topic     show all problems in a topic with status")
+    print("  grind stats     streaks, solved counts, trends, activity heatmap")
     print("  grind reference print the verified reference solution for a problem")
     print("  grind extras    print the hand-written edge cases for a problem")
+    print("  grind history   show attempt history for a problem")
+    print("  grind list      list all problems (filter: --topic --difficulty --search --due --new --proven)")
+    print("  grind upcoming  show reviews due in the next N days (--days 14)")
+    print("  grind export    export progress data (JSON/CSV)")
     print()
     print("Config & maintenance:")
     print("  grind config    show or set config (e.g. daily_new=3)")
+    print("  grind config preset=intensive|casual|maintenance  apply a preset")
     print("  grind backup    back up now (auto after every grind done)")
     print("  grind restore   pull backup onto a new machine")
     print("  grind update    pull latest version and reinstall")
+    print("  grind redo      mark a problem due now for immediate re-attempt")
+    print()
+    print("Common workflows:")
+    print("  Start a session:          grind next")
+    print("  Test while solving:       grind check        (or grind check --all)")
+    print("  Finish & grade:           grind done --solved   (or --fail / --rating 3.2)")
+    print("  Pause/resume:             grind pause  →  grind next")
+    print("  See what's due soon:      grind upcoming")
+    print("  Find a problem:           grind list --search two-sum")
+    print("  Review a topic:           grind topic arrays")
+    print("  Check readiness:          grind status")
+    print("  Deep dive on progress:    grind stats")
+    print("  Export data:              grind export --csv > progress.csv")
     print()
     print("Run `grind <command> --help` for options on any command.")
     print("Run `grind` with no args → same as `grind next`.")
@@ -407,6 +426,27 @@ def cmd_log(args) -> None:
         tests = entry.get("tests")
         test_str = f"  tests={tests}" if tests else ""
         print(f"{ts}  {slug}  rating={rating:.2f}  elapsed={elapsed:.1f}m  solved={solved}{test_str}")
+def cmd_history(args) -> None:
+    """Show attempt history for a problem."""
+    state = store.load()
+    slug = args.slug
+    if not slug:
+        sess = state.get("session")
+        if not sess:
+            sys.exit("No active session. Specify a slug or start one with: grind next")
+        slug = sess["slug"]
+    logs = [e for e in state.get("logs", []) if e["slug"] == slug]
+    if not logs:
+        print(f"No history for {slug}.")
+        return
+    for entry in logs:
+        ts = datetime.fromisoformat(entry["ts"]).strftime("%Y-%m-%d %H:%M")
+        rating = entry.get("rating", 0.0)
+        solved = "yes" if entry.get("solved") else "no"
+        elapsed = entry.get("elapsed", 0.0)
+        tests = entry.get("tests")
+        test_str = f"  tests={tests}" if tests else ""
+        print(f"{ts}  {slug}  rating={rating:.2f}  elapsed={elapsed:.1f}m  solved={solved}{test_str}")
 
 
 def cmd_list(args) -> None:
@@ -444,30 +484,32 @@ def cmd_list(args) -> None:
                 due_in = sch.fmt_interval(c.due, now)
             else:
                 due_in = "now"
-
-        rows.append((slug, p["topic"], p["difficulty"], status, ready, due_in))
+        rows.append((slug, p["title"], p["topic"], p["difficulty"], status, ready, due_in))
 
     # filters
     if args.topic:
-        rows = [r for r in rows if args.topic.lower() in r[1].lower()]
+        rows = [r for r in rows if args.topic.lower() in r[2].lower()]
     if args.due:
-        rows = [r for r in rows if r[3] == "due"]
+        rows = [r for r in rows if r[4] == "due"]
     if args.new:
-        rows = [r for r in rows if r[3] == "new"]
+        rows = [r for r in rows if r[4] == "new"]
     if args.proven:
-        rows = [r for r in rows if r[3] == "proven"]
+        rows = [r for r in rows if r[4] == "proven"]
     if args.difficulty:
-        rows = [r for r in rows if r[2] == args.difficulty]
+        rows = [r for r in rows if r[3] == args.difficulty]
+    if args.search:
+        term = args.search.lower()
+        rows = [r for r in rows if term in r[0].lower() or term in r[1].lower()]
 
     # sort: due first (most overdue), then by readiness ascending
     def sort_key(r):
         status_order = {"due": 0, "new": 1, "seen": 2, "proven": 3}
-        return (status_order.get(r[3], 4), r[4])
+        return (status_order.get(r[4], 4), r[5])
     rows.sort(key=sort_key)
 
     # print table
     print(f"{'slug':<30} {'topic':<28} {'diff':<6} {'status':<7} {'ready':>6}  due_in")
-    for slug, topic, diff, status, ready, due_in in rows:
+    for slug, title, topic, diff, status, ready, due_in in rows:
         print(f"{slug:<30} {topic:<28} {diff:<6} {status:<7} {ready*100:>5.0f}%  {due_in}")
 
 def cmd_upcoming(args) -> None:
@@ -624,7 +666,6 @@ def cmd_extras(args) -> None:
     print("These are not shown — like LeetCode's hidden test cases.")
 
 # ---------------------------------------------------------------- views
-
 def cmd_status(args) -> None:
     state = store.load()
     now = sch.utcnow()
@@ -637,6 +678,12 @@ def cmd_status(args) -> None:
           f"streak {cur}d (best {best}d)  ·  proven {proven}/150")
     check = " \u2713" if ready >= READY_GOAL else ""
     print(f"interview readiness: {ready*100:.0f}%  (goal {READY_GOAL*100:.0f}%){check}")
+    # Streak at-risk warning
+    if cur > 0:
+        activity = sch.activity_by_day(state)
+        today_key = now.astimezone().date().isoformat()
+        if today_key not in activity:
+            print(f"{YELLOW}\u26a0 streak at risk — practice today to keep it{RESET}")
     weak = sorted(sch.readiness_by_topic(state, now).items(), key=lambda kv: kv[1])[:3]
     print("least ready: " + "  ".join(f"{t} {v*100:.0f}%" for t, v in weak))
     if state["session"]:
@@ -658,6 +705,63 @@ def cmd_topics(args) -> None:
         print(f"{t:<28} {seen.get(t, 0):>4}/{total[t]:<3} {m*100:>6.0f}%  {'█' * int(m * 10)}")
     print("\nready = you solved the problem last attempt AND can recall it now")
     print(f"overall: {sch.overall_readiness(state, now)*100:.0f}%  (goal {READY_GOAL*100:.0f}%)")
+def cmd_topic_detail(args) -> None:
+    """Show all problems in a topic with status and readiness."""
+    state = store.load()
+    now = sch.utcnow()
+    bank = sch.bank()
+    cards = state.get("cards", {})
+    due_set = set(sch.due_reviews(state, now))
+    topic_query = args.topic.lower()
+
+    # Filter problems by topic (case-insensitive substring match)
+    topic_problems = [p for p in bank if topic_query in p["topic"].lower()]
+    if not topic_problems:
+        print(f"No problems found for topic matching '{args.topic}'.")
+        return
+
+    # Compute last solved status per slug
+    last_solved: dict[str, bool] = {}
+    for entry in state.get("logs", []):
+        last_solved[entry["slug"]] = entry.get("solved", False)
+
+    rows = []
+    total_ready = 0.0
+    for p in topic_problems:
+        slug = p["slug"]
+        card = cards.get(slug)
+        if slug not in cards:
+            status = "new"
+        elif slug in due_set:
+            status = "due"
+        elif last_solved.get(slug):
+            status = "proven"
+        else:
+            status = "seen"
+
+        ready = sch.readiness(state, slug, now)
+        total_ready += ready
+        due_in = ""
+        if card:
+            c = sch.Card.from_dict(card)
+            if c.due > now:
+                due_in = sch.fmt_interval(c.due, now)
+            else:
+                due_in = "now"
+
+        rows.append((slug, p["topic"], p["difficulty"], status, ready, due_in))
+
+    # sort: due first, then by readiness ascending
+    def sort_key(r):
+        status_order = {"due": 0, "new": 1, "seen": 2, "proven": 3}
+        return (status_order.get(r[3], 4), r[4])
+    rows.sort(key=sort_key)
+
+    avg_ready = total_ready / len(topic_problems) if topic_problems else 0.0
+    print(f"Topic: {topic_problems[0]['topic']}  (readiness {avg_ready*100:.0f}%)")
+    print(f"{'slug':<30} {'diff':<6} {'status':<7} {'ready':>6}  due_in")
+    for slug, topic, diff, status, ready, due_in in rows:
+        print(f"{slug:<30} {diff:<6} {status:<7} {ready*100:>5.0f}%  {due_in}")
 
 
 def cmd_stats(args) -> None:
@@ -723,6 +827,116 @@ def cmd_stats(args) -> None:
     if heatmap_peak:
         print(f"               · none {heatmap_bars[1:]} peak {heatmap_peak}/day")
 
+def cmd_export(args) -> None:
+    """Export progress data as JSON or CSV."""
+    import json
+    import csv
+    import sys
+    from io import StringIO
+
+    state = store.load()
+    now = sch.utcnow()
+    bank = sch.bank()
+    by_slug = {p["slug"]: p for p in bank}
+    cards = state.get("cards", {})
+    logs = state.get("logs", [])
+
+    # Compute readiness and status for each problem
+    due_set = set(sch.due_reviews(state, now))
+    last_solved: dict[str, bool] = {}
+    for entry in logs:
+        last_solved[entry["slug"]] = entry.get("solved", False)
+
+    problems_data = []
+    for p in bank:
+        slug = p["slug"]
+        card = cards.get(slug)
+        if slug not in cards:
+            status = "new"
+        elif slug in due_set:
+            status = "due"
+        elif last_solved.get(slug):
+            status = "proven"
+        else:
+            status = "seen"
+        ready = sch.readiness(state, slug, now)
+        due_in = ""
+        if card:
+            c = sch.Card.from_dict(card)
+            if c.due > now:
+                due_in = sch.fmt_interval(c.due, now)
+            else:
+                due_in = "now"
+        problems_data.append({
+            "slug": slug,
+            "title": p["title"],
+            "topic": p["topic"],
+            "difficulty": p["difficulty"],
+            "status": status,
+            "readiness": round(ready * 100, 1),
+            "due_in": due_in,
+            "stability": round(c.stability, 2) if card else None,
+            "difficulty_fsrs": round(c.difficulty, 2) if card else None,
+        })
+
+    cur, best = sch.streaks(state)
+    solved, distinct, proven = sch.solved_counts(state)
+    readiness_overall = sch.overall_readiness(state, now)
+    activity = sch.activity_by_day(state)
+
+    export_data = {
+        "exported_at": now.isoformat(),
+        "version": __version__,
+        "config": state.get("config", {}),
+        "summary": {
+            "total_problems": len(bank),
+            "seen": len(cards),
+            "due": len(due_set),
+            "proven": proven,
+            "streak_current": cur,
+            "streak_best": best,
+            "interview_readiness": round(readiness_overall * 100, 1),
+            "total_solved_attempts": solved,
+            "distinct_solved": distinct,
+        },
+        "problems": problems_data,
+        "logs": logs,
+        "activity_by_day": activity,
+    }
+
+    # Determine format
+    output_csv = args.csv
+    if args.json and args.csv:
+        sys.exit("Cannot specify both --json and --csv")
+    if not args.json and not args.csv:
+        output_csv = False  # default to JSON
+
+    # Output
+    if output_csv:
+        # Flatten logs for CSV
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["timestamp", "slug", "rating", "solved", "elapsed_min", "tests", "new"])
+        for entry in logs:
+            writer.writerow([
+                entry.get("ts", ""),
+                entry.get("slug", ""),
+                entry.get("rating", 0.0),
+                entry.get("solved", False),
+                entry.get("elapsed", 0.0),
+                entry.get("tests", ""),
+                entry.get("new", False),
+            ])
+        content = output.getvalue()
+    else:
+        content = json.dumps(export_data, indent=2)
+
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(content)
+        print(f"Exported to {args.output}")
+    else:
+        print(content)
 
 PRESETS = {
     "intensive": {"daily_new": 8, "retention_target": 0.95, "auto_edit": True},
@@ -980,6 +1194,7 @@ def _completion_data() -> dict:
 
     problems = bank()
     slugs = [p["slug"] for p in problems]
+    topics = sorted({p["topic"] for p in problems})
 
     # Build subcommand -> flags map from the parser structure
     # We reconstruct it here to keep it in sync with main()
@@ -996,12 +1211,15 @@ def _completion_data() -> dict:
         "check": ["--n", "--all"],
         "reference": [],
         "extras": [],
+        "history": [],
         "status": [],
         "topics": [],
+        "topic": [],
         "stats": [],
         "config": [],
         "backup": ["--remote"],
         "restore": ["--force"],
+        "export": ["--json", "--csv", "--output"],
         "update": [],
         "completion": [],
         "redo": [],
@@ -1023,6 +1241,7 @@ def _completion_data() -> dict:
     return {
         "subcommands": subcommands,
         "slugs": slugs,
+        "topics": topics,
         "global_flags": global_flags,
         "config_keys": config_keys,
     }
@@ -1107,11 +1326,13 @@ def _completion_script_zsh(data: dict) -> str:
         "_grind() {",
         "    local -a subcommands",
         "    local -a slugs",
+        "    local -a topics",
         "    local -a config_keys",
         "    local -a global_flags",
         "",
         "    subcommands=({})".format(" ".join(f"'{s}'" for s in sorted(data["subcommands"].keys()))),
         "    slugs=({})".format(" ".join(f"'{s}'" for s in data["slugs"])),
+        "    topics=({})".format(" ".join(f"'{s}'" for s in data["topics"])),
         "    config_keys=({})".format(" ".join(f"'{s}'" for s in data["config_keys"])),
         "    global_flags=({})".format(" ".join(f"'{s}'" for s in data["global_flags"])),
         "",
@@ -1129,7 +1350,7 @@ def _completion_script_zsh(data: dict) -> str:
         "            ;;",
         "        (args)",
         "            case $line[1] in",
-        "                (check|reference|extras|redo)",
+        "                (check|reference|extras|redo|history)",
         "                    _values 'problem' $slugs",
         "                    ;;",
         "                (config)",
@@ -1137,6 +1358,9 @@ def _completion_script_zsh(data: dict) -> str:
         "                    ;;",
         "                (completion)",
         "                    _values 'shell' 'bash' 'zsh' 'fish'",
+        "                    ;;",
+        "                (topic)",
+        "                    _values 'topic' $topics",
         "                    ;;",
         "                (list)",
         "                    _arguments '--topic[Filter by topic substring]' '--due[Show only due problems]' '--new[Show only new problems]' '--proven[Show only proven problems]'",
@@ -1168,7 +1392,6 @@ def _completion_script_zsh(data: dict) -> str:
     ]
     return "\n".join(lines)
 
-
 def _completion_script_fish(data: dict) -> str:
     lines = [
         "# grind fish completion",
@@ -1183,10 +1406,16 @@ def _completion_script_fish(data: dict) -> str:
             lines.append("complete -c grind -f -n '__fish_use_subcommand {}' -a '{}'".format(
                 cmd, " ".join(flags)))
     # Slug completions for commands that take a slug
-    slug_cmds = ["check", "reference", "extras", "redo"]
+    # Slug completions for commands that take a slug
+    slug_cmds = ["check", "reference", "extras", "redo", "history"]
     for cmd in slug_cmds:
         lines.append("complete -c grind -f -n '__fish_use_subcommand {}' -a '{}'".format(
             cmd, " ".join(f"'{s}'" for s in data["slugs"])))
+    # Topic completions
+    topic_cmds = ["topic", "list"]
+    for cmd in topic_cmds:
+        lines.append("complete -c grind -f -n '__fish_use_subcommand {}' -a '{}'".format(
+            cmd, " ".join(f"'{s}'" for s in data["topics"])))
     # Config keys
     lines.append("complete -c grind -f -n '__fish_use_subcommand config' -a '{}'".format(
         " ".join(f"'{k}'" for k in data["config_keys"])))
@@ -1261,12 +1490,17 @@ def main(argv=None) -> None:
     p.add_argument("--n", type=int, help="show last N entries (default 20)")
     p.add_argument("--all", action="store_true", help="show all entries")
     p.set_defaults(fn=cmd_log)
+    p = sub.add_parser("history", help="show attempt history for a problem")
+    p.add_argument("slug", nargs="?", help="defaults to the active session's problem")
+    p.set_defaults(fn=cmd_history)
+
     p = sub.add_parser("list", help="list all problems with status (new/due/seen/proven)")
     p.add_argument("--topic", help="filter by topic substring")
     p.add_argument("--due", action="store_true", help="show only due problems")
     p.add_argument("--new", action="store_true", help="show only new (unseen) problems")
     p.add_argument("--proven", action="store_true", help="show only proven problems")
     p.add_argument("--difficulty", choices=["Easy", "Medium", "Hard"], help="filter by difficulty")
+    p.add_argument("--search", help="filter by keyword in title or slug")
     p.set_defaults(fn=cmd_list)
     p = sub.add_parser("upcoming", help="show reviews due in the next N days")
     p.add_argument("--days", type=int, default=14, help="look ahead N days (default 14)")
@@ -1297,8 +1531,16 @@ def main(argv=None) -> None:
     p.set_defaults(fn=cmd_status)
     p = sub.add_parser("topics", help="per-topic interview-readiness breakdown")
     p.set_defaults(fn=cmd_topics)
+    p = sub.add_parser("topic", help="show all problems in a topic with status and readiness")
+    p.add_argument("topic", help="topic name (case-insensitive)")
+    p.set_defaults(fn=cmd_topic_detail)
     p = sub.add_parser("stats", help="streaks, solved counts, trends, activity")
     p.set_defaults(fn=cmd_stats)
+    p = sub.add_parser("export", help="export progress data (JSON or CSV)")
+    p.add_argument("--json", action="store_true", help="output as JSON (default)")
+    p.add_argument("--csv", action="store_true", help="output as CSV")
+    p.add_argument("--output", help="write to file instead of stdout")
+    p.set_defaults(fn=cmd_export)
     p = sub.add_parser("config", help="show or set config (key=value)")
     p.add_argument("set", nargs="?", help="e.g. daily_new=3")
     p.set_defaults(fn=cmd_config)
